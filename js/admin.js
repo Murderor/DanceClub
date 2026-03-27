@@ -135,7 +135,11 @@ window.Admin = {
         }
         
         // Загружаем и отображаем таблицу свободного времени
+         if (members && members.length > 0) {
         await this.renderAvailabilityTable(members);
+    } else {
+        document.getElementById('availability-table').innerHTML = '<p>Нет участников для отображения</p>';
+    }
         
         // Копирование кода
         document.getElementById('copy-invite')?.addEventListener('click', () => {
@@ -201,73 +205,253 @@ window.Admin = {
     },
     
     async renderAvailabilityTable(members) {
-        const supabase = window.initSupabase();
-        const container = document.getElementById('availability-table');
+    const supabase = window.initSupabase();
+    const container = document.getElementById('availability-table');
+    
+    if (!members || members.length === 0) {
+        container.innerHTML = '<p>Нет участников для отображения</p>';
+        return;
+    }
+    
+    // Получаем текущую неделю
+    const { startOfWeek, endOfWeek } = this.getCurrentWeekRange();
+    const weekDates = this.getWeekDates(startOfWeek);
+    
+    // Загружаем доступность на текущую неделю для всех участников
+    const { data: allAvailability } = await supabase
+        .from('availability')
+        .select('*')
+        .in('user_id', members.map(m => m.id))
+        .gte('date', startOfWeek.toISOString().split('T')[0])
+        .lte('date', endOfWeek.toISOString().split('T')[0]);
+    
+    // Группируем доступность по пользователям и датам
+    const availabilityMap = {};
+    allAvailability?.forEach(a => {
+        if (!availabilityMap[a.user_id]) availabilityMap[a.user_id] = {};
+        const dateStr = a.date;
+        if (!availabilityMap[a.user_id][dateStr]) availabilityMap[a.user_id][dateStr] = [];
+        availabilityMap[a.user_id][dateStr].push(a);
+    });
+    
+    // Дни недели с датами
+    const daysOfWeek = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+    
+    // Создаем HTML таблицы
+    let html = `
+        <div class="week-selector">
+            <button class="prev-week-table" id="prev-week-table">← Предыдущая неделя</button>
+            <span class="week-range-table">${this.formatDateRange(startOfWeek, endOfWeek)}</span>
+            <button class="next-week-table" id="next-week-table">Следующая неделя →</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="availability-schedule">
+                <thead>
+                    <tr>
+                        <th>Участник</th>
+                        ${daysOfWeek.map((day, index) => `<th>${day}<br><small>${this.formatDate(weekDates[index])}</small></th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (const member of members) {
+        const userAvailability = availabilityMap[member.id] || {};
+        html += `<tr>`;
+        html += `<td class="user-info-cell">
+                    <strong>${this.escapeHtml(member.full_name || member.email)}</strong>
+                    <br><small>код: ${member.unique_code}</small>
+                </td>`;
         
-        if (!members || members.length === 0) {
-            container.innerHTML = '<p>Нет участников для отображения</p>';
-            return;
-        }
-        
-        // Загружаем все данные о доступности
-        const { data: allAvailability } = await supabase
-            .from('availability')
-            .select('*')
-            .in('user_id', members.map(m => m.id));
-        
-        // Группируем доступность по пользователям
-        const availabilityMap = {};
-        allAvailability?.forEach(a => {
-            if (!availabilityMap[a.user_id]) availabilityMap[a.user_id] = [];
-            availabilityMap[a.user_id].push(a);
-        });
-        
-        // Дни недели
-        const daysOfWeek = [
-            'Понедельник', 'Вторник', 'Среда', 
-            'Четверг', 'Пятница', 'Суббота', 'Воскресенье'
-        ];
-        
-        // Создаем HTML таблицы
-        let html = `
-            <div style="overflow-x: auto;">
-                <table class="availability-schedule">
-                    <thead>
-                        <tr>
-                            <th>Участник</th>
-                            ${daysOfWeek.map(day => `<th>${day}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        for (const member of members) {
-            const slots = availabilityMap[member.id] || [];
-            html += `<tr>`;
-            html += `<td><strong>${this.escapeHtml(member.full_name || member.email)}</strong><br><small>код: ${member.unique_code}</small></td>`;
+        for (let i = 0; i < daysOfWeek.length; i++) {
+            const dateStr = weekDates[i].toISOString().split('T')[0];
+            const daySlots = userAvailability[dateStr] || [];
             
-            for (let i = 0; i < daysOfWeek.length; i++) {
-                const daySlots = slots.filter(slot => slot.day_of_week === i);
-                if (daySlots.length > 0) {
-                    const timesHtml = daySlots.map(slot => 
-                        `<div class="time-badge">${slot.start_time.slice(0,5)} - ${slot.end_time.slice(0,5)}</div>`
-                    ).join('');
-                    html += `<td class="availability-cell">${timesHtml}</td>`;
-                } else {
-                    html += `<td class="availability-cell empty">—</td>`;
-                }
+            if (daySlots.length > 0) {
+                const timesHtml = daySlots.map(slot => 
+                    `<div class="time-badge">${slot.start_time.slice(0,5)} - ${slot.end_time.slice(0,5)}</div>`
+                ).join('');
+                html += `<td class="availability-cell">${timesHtml}</td>`;
+            } else {
+                html += `<td class="availability-cell empty">—</td>`;
             }
-            html += `</tr>`;
         }
+        html += `</tr>`;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем обработчики для навигации по неделям
+    const prevBtn = document.getElementById('prev-week-table');
+    const nextBtn = document.getElementById('next-week-table');
+    
+    if (prevBtn) {
+        prevBtn.removeEventListener('click', this.handleWeekChange);
+        prevBtn.addEventListener('click', () => this.handleWeekChange(-1, members));
+    }
+    
+    if (nextBtn) {
+        nextBtn.removeEventListener('click', this.handleWeekChange);
+        nextBtn.addEventListener('click', () => this.handleWeekChange(1, members));
+    }
+},
+
+getCurrentWeekRange() {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diff = (day === 0 ? 6 : day - 1);
+    startOfWeek.setDate(now.getDate() - diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    return { startOfWeek, endOfWeek };
+},
+
+getWeekDates(startOfWeek) {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        dates.push(date);
+    }
+    return dates;
+},
+
+formatDate(date) {
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+},
+
+formatDateRange(start, end) {
+    const startStr = start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    const endStr = end.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    return `${startStr} — ${endStr}`;
+},
+
+async handleWeekChange(direction, members) {
+    // Получаем текущую отображаемую неделю
+    const weekRangeElem = document.querySelector('.week-range-table');
+    if (!weekRangeElem) return;
+    
+    // Парсим текущую дату из отображаемого диапазона
+    const currentRange = weekRangeElem.textContent;
+    const dates = currentRange.split(' — ');
+    const currentStartDate = new Date(dates[0].split(' ').reverse().join(' ') + ' 2024');
+    
+    // Вычисляем новую неделю
+    const newStartDate = new Date(currentStartDate);
+    newStartDate.setDate(currentStartDate.getDate() + (direction * 7));
+    
+    // Обновляем таблицу с новой неделей
+    await this.renderAvailabilityTableWithWeek(members, newStartDate);
+},
+
+async renderAvailabilityTableWithWeek(members, startOfWeek) {
+    const supabase = window.initSupabase();
+    const container = document.getElementById('availability-table');
+    
+    if (!members || members.length === 0) {
+        container.innerHTML = '<p>Нет участников для отображения</p>';
+        return;
+    }
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    const weekDates = this.getWeekDates(startOfWeek);
+    
+    // Загружаем доступность на выбранную неделю
+    const { data: allAvailability } = await supabase
+        .from('availability')
+        .select('*')
+        .in('user_id', members.map(m => m.id))
+        .gte('date', startOfWeek.toISOString().split('T')[0])
+        .lte('date', endOfWeek.toISOString().split('T')[0]);
+    
+    // Группируем доступность
+    const availabilityMap = {};
+    allAvailability?.forEach(a => {
+        if (!availabilityMap[a.user_id]) availabilityMap[a.user_id] = {};
+        const dateStr = a.date;
+        if (!availabilityMap[a.user_id][dateStr]) availabilityMap[a.user_id][dateStr] = [];
+        availabilityMap[a.user_id][dateStr].push(a);
+    });
+    
+    const daysOfWeek = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+    
+    let html = `
+        <div class="week-selector">
+            <button class="prev-week-table" id="prev-week-table">← Предыдущая неделя</button>
+            <span class="week-range-table">${this.formatDateRange(startOfWeek, endOfWeek)}</span>
+            <button class="next-week-table" id="next-week-table">Следующая неделя →</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="availability-schedule">
+                <thead>
+                    <tr>
+                        <th>Участник</th>
+                        ${daysOfWeek.map((day, index) => `<th>${day}<br><small>${this.formatDate(weekDates[index])}</small></th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (const member of members) {
+        const userAvailability = availabilityMap[member.id] || {};
+        html += `<tr>`;
+        html += `<td class="user-info-cell">
+                    <strong>${this.escapeHtml(member.full_name || member.email)}</strong>
+                    <br><small>код: ${member.unique_code}</small>
+                </td>`;
         
-        html += `
-                    </tbody>
-                </table>
-            </div>
-        `;
-        
-        container.innerHTML = html;
-    },
+        for (let i = 0; i < daysOfWeek.length; i++) {
+            const dateStr = weekDates[i].toISOString().split('T')[0];
+            const daySlots = userAvailability[dateStr] || [];
+            
+            if (daySlots.length > 0) {
+                const timesHtml = daySlots.map(slot => 
+                    `<div class="time-badge">${slot.start_time.slice(0,5)} - ${slot.end_time.slice(0,5)}</div>`
+                ).join('');
+                html += `<td class="availability-cell">${timesHtml}</td>`;
+            } else {
+                html += `<td class="availability-cell empty">—</td>`;
+            }
+        }
+        html += `</tr>`;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем обработчики для навигации
+    const prevBtn = document.getElementById('prev-week-table');
+    const nextBtn = document.getElementById('next-week-table');
+    
+    if (prevBtn) {
+        prevBtn.removeEventListener('click', () => {});
+        prevBtn.addEventListener('click', () => this.handleWeekChange(-1, members));
+    }
+    
+    if (nextBtn) {
+        nextBtn.removeEventListener('click', () => {});
+        nextBtn.addEventListener('click', () => this.handleWeekChange(1, members));
+    }
+},
     
     async initCalendar() {
         const supabase = window.initSupabase();
@@ -355,13 +539,20 @@ window.Admin = {
     },
     
     async showAvailabilityModal(start, end) {
-        const supabase = window.initSupabase();
-        
-        if (!window.currentGroup) {
-            alert('Вы не состоите в коллективе');
-            return;
-        }
-        
+    const supabase = window.initSupabase();
+    
+    if (!window.currentGroup) {
+        alert('Вы не состоите в коллективе');
+        return;
+    }
+    
+    // Блокируем возможность повторного открытия
+    if (this.isModalOpen) {
+        return;
+    }
+    this.isModalOpen = true;
+    
+    try {
         const { data: users } = await supabase
             .from('profiles')
             .select('id, full_name, name, unique_code')
@@ -379,8 +570,7 @@ window.Admin = {
         });
     
         const dateTime = start;
-        const jsDay = dateTime.getDay();
-        const ourDay = jsDay === 0 ? 6 : jsDay - 1;
+        const dateStr = dateTime.toISOString().split('T')[0];
         const timeMinutes = dateTime.getHours() * 60 + dateTime.getMinutes();
     
         const freeUsers = [];
@@ -388,9 +578,11 @@ window.Admin = {
     
         for (const user of users) {
             const slots = availabilityMap[user.id] || [];
+            // Фильтруем слоты по конкретной дате
+            const daySlots = slots.filter(slot => slot.date === dateStr);
             let isFree = false;
-            for (const slot of slots) {
-                if (slot.day_of_week !== ourDay) continue;
+            
+            for (const slot of daySlots) {
                 const startMinutes = parseInt(slot.start_time.split(':')[0]) * 60 + parseInt(slot.start_time.split(':')[1]);
                 const endMinutes = parseInt(slot.end_time.split(':')[0]) * 60 + parseInt(slot.end_time.split(':')[1]);
                 if (timeMinutes >= startMinutes && timeMinutes <= endMinutes) {
@@ -402,70 +594,157 @@ window.Admin = {
             else busyUsers.push(user.full_name || user.name || user.unique_code);
         }
     
+        // Создаем модальное окно
         const modal = document.createElement('div');
         modal.className = 'modal';
+        modal.setAttribute('id', 'availability-modal');
         modal.innerHTML = `
             <div class="modal-content">
-                <h4>Доступность на ${start.toLocaleString()}</h4>
-                <div class="availability-stats">
-                    <div class="stat-free">
-                        <span class="stat-label">✅ Свободны</span>
-                        <span class="stat-count">${freeUsers.length}</span>
-                    </div>
-                    <div class="stat-busy">
-                        <span class="stat-label">❌ Заняты / не указали</span>
-                        <span class="stat-count">${busyUsers.length}</span>
-                    </div>
+                <div class="modal-header">
+                    <h4>Доступность на ${start.toLocaleString()}</h4>
+                    <button class="modal-close-btn">&times;</button>
                 </div>
-                <h5>Свободны (${freeUsers.length})</h5>
-                <ul>${freeUsers.map(n => `<li>${this.escapeHtml(n)}</li>`).join('') || '<li>Нет</li>'}</ul>
-                <h5>Заняты / не указали (${busyUsers.length})</h5>
-                <ul>${busyUsers.map(n => `<li>${this.escapeHtml(n)}</li>`).join('') || '<li>Нет</li>'}</ul>
-                <form id="create-event-form">
-                    <input type="text" id="event-title" placeholder="Название репетиции" required>
-                    <textarea id="event-desc" placeholder="Описание"></textarea>
-                    <button type="submit">Создать репетицию</button>
-                    <button type="button" class="danger" id="close-modal">Отмена</button>
-                </form>
+                <div class="modal-body">
+                    <div class="availability-stats">
+                        <div class="stat-free">
+                            <span class="stat-label">✅ Свободны</span>
+                            <span class="stat-count">${freeUsers.length}</span>
+                        </div>
+                        <div class="stat-busy">
+                            <span class="stat-label">❌ Заняты / не указали</span>
+                            <span class="stat-count">${busyUsers.length}</span>
+                        </div>
+                    </div>
+                    <h5>Свободны (${freeUsers.length})</h5>
+                    <ul class="free-users-list">${freeUsers.map(n => `<li>${this.escapeHtml(n)}</li>`).join('') || '<li>Нет</li>'}</ul>
+                    <h5>Заняты / не указали (${busyUsers.length})</h5>
+                    <ul class="busy-users-list">${busyUsers.map(n => `<li>${this.escapeHtml(n)}</li>`).join('') || '<li>Нет</li>'}</ul>
+                    <form id="create-event-form">
+                        <input type="text" id="event-title" placeholder="Название репетиции" required autocomplete="off">
+                        <textarea id="event-desc" placeholder="Описание (необязательно)" rows="3"></textarea>
+                        <div class="modal-buttons">
+                            <button type="button" class="btn-cancel-event">Отмена</button>
+                            <button type="submit" class="btn-create-event">Создать репетицию</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         `;
     
         document.body.appendChild(modal);
-    
-        document.getElementById('close-modal').addEventListener('click', () => modal.remove());
-        document.getElementById('create-event-form').addEventListener('submit', async (e) => {
+        
+        // Добавляем класс для анимации
+        setTimeout(() => modal.classList.add('show'), 10);
+        
+        // Функция закрытия
+        const closeModal = () => {
+            if (!modal) return;
+            modal.classList.remove('show');
+            setTimeout(() => {
+                if (modal && modal.remove) {
+                    modal.remove();
+                }
+                this.isModalOpen = false;
+            }, 300);
+        };
+        
+        // Обработчики закрытия
+        const closeBtn = modal.querySelector('.modal-close-btn');
+        const cancelBtn = modal.querySelector('.btn-cancel-event');
+        
+        if (closeBtn) closeBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const title = document.getElementById('event-title').value;
-            const desc = document.getElementById('event-desc').value;
-            
-            if (!title) {
-                alert('Введите название репетиции');
-                return;
-            }
-            
-            const eventData = {
-                title: title,
-                description: desc,
-                start_time: start.toISOString(),
-                end_time: end.toISOString(),
-                created_by: window.currentUser.id,
-                group_id: window.currentGroup.id
-            };
-            
-            console.log('Создание события:', eventData);
-            
-            const { error } = await supabase.from('events').insert(eventData);
-            
-            if (error) {
-                console.error('Ошибка создания события:', error);
-                alert('Ошибка создания репетиции: ' + error.message);
-            } else {
-                alert('Репетиция создана!');
-                modal.remove();
-                await this.render();
+            e.stopPropagation();
+            closeModal();
+        });
+        
+        if (cancelBtn) cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal();
+        });
+        
+        // Закрытие по клику на фон
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
             }
         });
-    },
+        
+        // Закрытие по Escape
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeModal();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        
+        // Обработка формы
+        const form = modal.querySelector('#create-event-form');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const title = document.getElementById('event-title')?.value;
+                const desc = document.getElementById('event-desc')?.value;
+                
+                if (!title) {
+                    alert('Введите название репетиции');
+                    return;
+                }
+                
+                const createBtn = modal.querySelector('.btn-create-event');
+                if (createBtn) {
+                    createBtn.disabled = true;
+                    createBtn.textContent = 'Создание...';
+                }
+                
+                const eventData = {
+                    title: title,
+                    description: desc || '',
+                    start_time: start.toISOString(),
+                    end_time: end.toISOString(),
+                    created_by: window.currentUser.id,
+                    group_id: window.currentGroup.id
+                };
+                
+                console.log('Создание события:', eventData);
+                
+                const { error } = await supabase.from('events').insert(eventData);
+                
+                if (error) {
+                    console.error('Ошибка создания события:', error);
+                    alert('Ошибка создания репетиции: ' + error.message);
+                    if (createBtn) {
+                        createBtn.disabled = false;
+                        createBtn.textContent = 'Создать репетицию';
+                    }
+                } else {
+                    alert('Репетиция создана!');
+                    closeModal();
+                    // Обновляем календарь
+                    if (window.Admin && window.Admin.initCalendar) {
+                        await window.Admin.initCalendar();
+                    }
+                    // Обновляем страницу событий
+                    if (window.Events && window.Events.render) {
+                        await window.Events.render();
+                    }
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('Ошибка в showAvailabilityModal:', error);
+        alert('Произошла ошибка при загрузке данных');
+        this.isModalOpen = false;
+    }
+},
     
     escapeHtml(text) {
         if (!text) return '';

@@ -1648,3 +1648,282 @@ tr:hover {
         }
     }
 }
+/* Улучшенные стили для модального окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+}
+
+.modal.show {
+    opacity: 1;
+}
+
+.modal .modal-content {
+    background: white;
+    border-radius: 1.5rem;
+    width: 90%;
+    max-width: 550px;
+    max-height: 85vh;
+    overflow-y: auto;
+    transform: scale(0.9);
+    transition: transform 0.3s ease-out;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal.show .modal-content {
+    transform: scale(1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    border-radius: 1.5rem 1.5rem 0 0;
+}
+
+.modal-header h4 {
+    margin: 0;
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec489a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #94a3b8;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+    background: #f1f5f9;
+    color: #475569;
+    transform: none;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* Стили для списков пользователей */
+.free-users-list,
+.busy-users-list {
+    margin: 0.5rem 0 1rem 1.5rem;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.free-users-list li,
+.busy-users-list li {
+    padding: 0.25rem 0;
+    color: #334155;
+}
+
+/* Кнопки в модальном окне */
+.modal-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.btn-cancel-event {
+    flex: 1;
+    background: #e2e8f0;
+    color: #475569;
+    border: none;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel-event:hover {
+    background: #cbd5e1;
+    transform: translateY(-1px);
+}
+
+.btn-create-event {
+    flex: 1;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec489a 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-create-event:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.btn-create-event:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Стили для формы в модалке */
+#create-event-form input,
+#create-event-form textarea {
+    width: 100%;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 0.75rem;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+#create-event-form input:focus,
+#create-event-form textarea:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+/* Адаптивность для модалки на мобильных */
+@media (max-width: 768px) {
+    .modal .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .modal-header {
+        padding: 1rem;
+    }
+    
+    .modal-header h4 {
+        font-size: 1rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+    }
+    
+    .free-users-list,
+    .busy-users-list {
+        max-height: 100px;
+    }
+    
+    .free-users-list li,
+    .busy-users-list li {
+        font-size: 0.85rem;
+    }
+}
+
+/* Стили для селектора недели в таблице доступности */
+.week-selector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 1rem;
+    flex-wrap: wrap;
+}
+
+.week-selector button {
+    background: white;
+    color: #667eea;
+    border: 2px solid #e2e8f0;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.week-selector button:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.week-range-table {
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 1rem;
+    background: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.user-info-cell {
+    background: #f8fafc;
+    font-weight: 500;
+    min-width: 150px;
+}
+
+.user-info-cell strong {
+    color: #1e293b;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.user-info-cell small {
+    color: #64748b;
+    font-size: 0.7rem;
+}
+
+/* Адаптивность для селектора недели */
+@media (max-width: 768px) {
+    .week-selector {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .week-selector button {
+        width: 100%;
+        padding: 0.5rem;
+    }
+    
+    .week-range-table {
+        order: -1;
+        width: 100%;
+        text-align: center;
+    }
+    
+    .user-info-cell {
+        min-width: 120px;
+    }
+    
+    .user-info-cell strong {
+        font-size: 0.85rem;
+    }
+}
