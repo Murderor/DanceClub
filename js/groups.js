@@ -1,28 +1,45 @@
 // Модуль управления коллективами
 window.Groups = {
     allGroups: [],
-    currentGroupMembers: new Map(), // Кэш участников коллективов
+    userGroups: [],
+    currentGroupMembers: new Map(),
     
-    // Загрузка всех коллективов
-    async loadGroups() {
-        console.log('📚 Загружаем коллективы...');
+    // Загрузка коллективов пользователя
+    async loadUserGroups() {
+        console.log('📚 Загружаем коллективы пользователя...');
         const supabase = window.initSupabase();
         
         if (!supabase) return [];
         
         try {
-            const { data, error } = await supabase
+            const { data: memberships, error: membershipError } = await supabase
+                .from('group_members')
+                .select('group_id')
+                .eq('user_id', window.currentProfile.id);
+            
+            if (membershipError) throw membershipError;
+            
+            if (!memberships || memberships.length === 0) {
+                console.log('ℹ️ Пользователь не состоит ни в одном коллективе');
+                this.userGroups = [];
+                return [];
+            }
+            
+            const groupIds = memberships.map(m => m.group_id);
+            
+            const { data: groups, error: groupsError } = await supabase
                 .from('dance_groups')
                 .select('*')
+                .in('id', groupIds)
                 .order('name');
             
-            if (error) throw error;
+            if (groupsError) throw groupsError;
             
-            console.log(`✅ Загружено ${data?.length || 0} коллективов`);
-            this.allGroups = data || [];
-            return this.allGroups;
+            console.log(`✅ Загружено ${groups?.length || 0} коллективов пользователя`);
+            this.userGroups = groups || [];
+            return this.userGroups;
         } catch (err) {
-            console.error('❌ Ошибка загрузки коллективов:', err);
+            console.error('❌ Ошибка загрузки коллективов пользователя:', err);
             return [];
         }
     },
@@ -35,7 +52,6 @@ window.Groups = {
         if (!supabase) return [];
         
         try {
-            // Сначала получаем связи
             const { data: memberships, error: membershipError } = await supabase
                 .from('group_members')
                 .select('user_id, role, joined_at')
@@ -48,7 +64,6 @@ window.Groups = {
                 return [];
             }
             
-            // Получаем данные пользователей
             const userIds = memberships.map(m => m.user_id);
             const { data: users, error: usersError } = await supabase
                 .from('users')
@@ -57,7 +72,6 @@ window.Groups = {
             
             if (usersError) throw usersError;
             
-            // Объединяем данные
             const members = memberships.map(membership => {
                 const user = users.find(u => u.id === membership.user_id);
                 return {
@@ -83,12 +97,14 @@ window.Groups = {
         if (!supabase) return null;
         
         try {
+            const leaderName = window.currentProfile.last_name + ' ' + window.currentProfile.first_name;
+            
             const { data, error } = await supabase
                 .from('dance_groups')
                 .insert([{
                     name: groupData.name,
                     leader_id: window.currentProfile.id,
-                    leader_name: `${window.currentProfile.last_name} ${window.currentProfile.first_name}`,
+                    leader_name: leaderName,
                     description: groupData.description || null
                 }])
                 .select()
@@ -96,10 +112,8 @@ window.Groups = {
             
             if (error) throw error;
             
-            // Автоматически добавляем создателя как лидера
             await this.addMemberToGroup(data.id, window.currentProfile.id, 'leader');
-            
-            await this.loadGroups();
+            await this.loadUserGroups();
             console.log('✅ Коллектив создан:', data);
             return data;
         } catch (err) {
@@ -125,7 +139,7 @@ window.Groups = {
             
             if (error) throw error;
             
-            await this.loadGroups();
+            await this.loadUserGroups();
             console.log('✅ Коллектив обновлен:', data);
             return data;
         } catch (err) {
@@ -149,7 +163,7 @@ window.Groups = {
             
             if (error) throw error;
             
-            await this.loadGroups();
+            await this.loadUserGroups();
             console.log('✅ Коллектив удален');
             return true;
         } catch (err) {
@@ -176,8 +190,12 @@ window.Groups = {
             
             if (error) throw error;
             
-            // Очищаем кэш
             this.currentGroupMembers.delete(groupId);
+            
+            if (userId === window.currentProfile.id) {
+                await this.loadUserGroups();
+            }
+            
             console.log('✅ Участник добавлен');
             return true;
         } catch (err) {
@@ -202,8 +220,12 @@ window.Groups = {
             
             if (error) throw error;
             
-            // Очищаем кэш
             this.currentGroupMembers.delete(groupId);
+            
+            if (userId === window.currentProfile.id) {
+                await this.loadUserGroups();
+            }
+            
             console.log('✅ Участник удален');
             return true;
         } catch (err) {
@@ -212,33 +234,9 @@ window.Groups = {
         }
     },
     
-    // Получить коллективы, где пользователь является участником
-    async getUserGroups(userId) {
-        if (!userId) return [];
-        
-        const supabase = window.initSupabase();
-        
-        if (!supabase) return [];
-        
-        try {
-            const { data, error } = await supabase
-                .from('group_members')
-                .select('group_id')
-                .eq('user_id', userId);
-            
-            if (error) throw error;
-            
-            const groupIds = data.map(m => m.group_id);
-            return this.allGroups.filter(group => groupIds.includes(group.id));
-        } catch (err) {
-            console.error('❌ Ошибка получения коллективов пользователя:', err);
-            return [];
-        }
-    },
-    
     // Проверить, является ли пользователь лидером коллектива
     isGroupLeader(groupId) {
-        const group = this.allGroups.find(g => g.id === groupId);
+        const group = this.userGroups.find(g => g.id === groupId);
         return group?.leader_id === window.currentProfile?.id;
     },
     
@@ -249,16 +247,16 @@ window.Groups = {
         
         if (!mainContainer) return;
         
-        await this.loadGroups();
+        await this.loadUserGroups();
         
         const userName = window.currentProfile ? 
-            `${window.currentProfile.last_name} ${window.currentProfile.first_name}` : 
+            window.currentProfile.last_name + ' ' + window.currentProfile.first_name : 
             window.currentUser?.email || 'Пользователь';
         
         const userCode = window.currentProfile?.unique_code || '—';
         
-        // Получаем количество коллективов пользователя
-        const userGroups = await this.getUserGroups(window.currentProfile?.id);
+        const leaderGroupsCount = this.userGroups.filter(g => this.isGroupLeader(g.id)).length;
+        const totalGroupsCount = this.userGroups.length;
         
         mainContainer.innerHTML = `
             <div class="main-header">
@@ -269,10 +267,10 @@ window.Groups = {
                 <div class="user-info">
                     <span class="user-name">
                         <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
-                        ${window.currentProfile?.unique_code ? `<span class="user-code" style="margin-left: 10px;">Код: ${window.currentProfile.unique_code}</span>` : ''}
+                        ${window.currentProfile?.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + window.currentProfile.unique_code + '</span>' : ''}
                     </span>
                     <button class="btn btn-secondary" id="manageMembersBtn" style="background: #8b5cf6;">
-                        <i class="fas fa-users"></i> Участники
+                        <i class="fas fa-users"></i> Все участники
                     </button>
                     <button class="logout-btn" id="logoutBtn">
                         <i class="fas fa-sign-out-alt"></i> Выйти
@@ -286,17 +284,17 @@ window.Groups = {
                         <i class="fas fa-users"></i>
                     </div>
                     <div class="stat-info">
-                        <h3>${this.allGroups.length}</h3>
-                        <p>Всего коллективов</p>
+                        <h3>${totalGroupsCount}</h3>
+                        <p>Мои коллективы</p>
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">
-                        <i class="fas fa-user-plus"></i>
+                        <i class="fas fa-user-tie"></i>
                     </div>
                     <div class="stat-info">
-                        <h3>${userGroups.length}</h3>
-                        <p>Мои коллективы</p>
+                        <h3>${leaderGroupsCount}</h3>
+                        <p>Где я лидер</p>
                     </div>
                 </div>
                 <div class="stat-card">
@@ -316,7 +314,7 @@ window.Groups = {
                 </button>
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="searchGroupsInput" placeholder="Поиск коллективов...">
+                    <input type="text" id="searchGroupsInput" placeholder="Поиск по моим коллективам...">
                 </div>
                 <button class="btn btn-secondary" id="refreshGroupsBtn">
                     <i class="fas fa-sync-alt"></i> Обновить
@@ -333,11 +331,11 @@ window.Groups = {
     
     // Рендеринг карточек коллективов
     renderGroupsCards(searchTerm = '') {
-        let filteredGroups = this.allGroups;
+        let filteredGroups = this.userGroups;
         
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filteredGroups = this.allGroups.filter(group => 
+            filteredGroups = this.userGroups.filter(group => 
                 group.name.toLowerCase().includes(term) ||
                 group.leader_name.toLowerCase().includes(term) ||
                 (group.description && group.description.toLowerCase().includes(term))
@@ -345,43 +343,51 @@ window.Groups = {
         }
         
         if (filteredGroups.length === 0) {
+            const message = searchTerm ? 'Коллективы не найдены' : 'Вы пока не состоите ни в одном коллективе';
             return `
                 <div class="empty-state">
                     <i class="fas fa-users-slash"></i>
-                    <p>Коллективов не найдено</p>
+                    <p>${message}</p>
                     <button class="btn btn-primary" onclick="window.Groups.showCreateGroupModal()">
-                        Создать первый коллектив
+                        <i class="fas fa-plus-circle"></i> Создать первый коллектив
                     </button>
                 </div>
             `;
         }
         
-        return filteredGroups.map(group => `
-            <div class="group-card" data-group-id="${group.id}">
-                <div class="group-card-header">
-                    <h3><i class="fas fa-users"></i> ${this.escapeHtml(group.name)}</h3>
-                    ${this.isGroupLeader(group.id) ? '<span class="leader-badge">Лидер</span>' : ''}
-                </div>
-                <div class="group-card-body">
-                    <p><i class="fas fa-user-tie"></i> Лидер: ${this.escapeHtml(group.leader_name)}</p>
-                    ${group.description ? `<p><i class="fas fa-info-circle"></i> ${this.escapeHtml(group.description)}</p>` : ''}
-                    <p><i class="fas fa-calendar-alt"></i> Создан: ${new Date(group.created_at).toLocaleDateString('ru-RU')}</p>
-                </div>
-                <div class="group-card-actions">
-                    <button class="btn btn-secondary view-group-btn" data-group-id="${group.id}">
-                        <i class="fas fa-eye"></i> Просмотр
-                    </button>
-                    ${this.isGroupLeader(group.id) ? `
-                        <button class="btn btn-primary edit-group-btn" data-group-id="${group.id}">
-                            <i class="fas fa-edit"></i> Редактировать
+        return filteredGroups.map(group => {
+            const isLeader = this.isGroupLeader(group.id);
+            const badge = isLeader ? '<span class="leader-badge">👑 Лидер</span>' : '<span class="member-badge">💃 Участник</span>';
+            const createdDate = new Date(group.created_at).toLocaleDateString('ru-RU');
+            const descriptionHtml = group.description ? '<p><i class="fas fa-info-circle"></i> ' + this.escapeHtml(group.description) + '</p>' : '';
+            
+            return `
+                <div class="group-card" data-group-id="${group.id}">
+                    <div class="group-card-header">
+                        <h3><i class="fas fa-users"></i> ${this.escapeHtml(group.name)}</h3>
+                        ${badge}
+                    </div>
+                    <div class="group-card-body">
+                        <p><i class="fas fa-user-tie"></i> Лидер: ${this.escapeHtml(group.leader_name)}</p>
+                        ${descriptionHtml}
+                        <p><i class="fas fa-calendar-alt"></i> Создан: ${createdDate}</p>
+                    </div>
+                    <div class="group-card-actions">
+                        <button class="btn btn-secondary view-group-btn" data-group-id="${group.id}">
+                            <i class="fas fa-eye"></i> Просмотр
                         </button>
-                        <button class="btn btn-danger delete-group-btn" data-group-id="${group.id}">
-                            <i class="fas fa-trash"></i> Удалить
-                        </button>
-                    ` : ''}
+                        ${isLeader ? `
+                            <button class="btn btn-primary edit-group-btn" data-group-id="${group.id}">
+                                <i class="fas fa-edit"></i> Редактировать
+                            </button>
+                            <button class="btn btn-danger delete-group-btn" data-group-id="${group.id}">
+                                <i class="fas fa-trash"></i> Удалить
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     },
     
     // Показ модального окна создания коллектива
@@ -417,7 +423,7 @@ window.Groups = {
     
     // Показ модального окна редактирования коллектива
     async showEditGroupModal(groupId) {
-        const group = this.allGroups.find(g => g.id === groupId);
+        const group = this.userGroups.find(g => g.id === groupId);
         if (!group) return;
         
         Swal.fire({
@@ -449,50 +455,57 @@ window.Groups = {
         });
     },
     
-    // Просмотр коллектива (детальная страница)
+    // Просмотр коллектива
     async viewGroup(groupId) {
-        const group = this.allGroups.find(g => g.id === groupId);
+        const group = this.userGroups.find(g => g.id === groupId);
         if (!group) return;
         
         const members = await this.loadGroupMembers(groupId);
         const isLeader = this.isGroupLeader(groupId);
+        
+        let membersHtml = '';
+        for (const m of members) {
+            const memberName = this.escapeHtml(m.last_name) + ' ' + this.escapeHtml(m.first_name) + (m.patronymic ? ' ' + this.escapeHtml(m.patronymic) : '');
+            const roleText = m.role === 'leader' ? '👑 Лидер' : '💃 Участник';
+            const removeButton = (isLeader && m.id !== window.currentProfile.id) ? 
+                '<button class="btn btn-danger remove-member-btn" data-user-id="' + m.id + '" style="padding: 5px 10px; font-size: 12px;"><i class="fas fa-user-minus"></i></button>' : '';
+            
+            membersHtml += `
+                <div class="member-item">
+                    <div>
+                        <strong>${memberName}</strong>
+                        <span class="member-role">${roleText}</span>
+                        <div class="member-code">Код: ${m.unique_code}</div>
+                    </div>
+                    ${removeButton}
+                </div>
+            `;
+        }
+        
+        const addMemberSection = isLeader ? `
+            <hr>
+            <div class="add-member-section">
+                <h4>Добавить участника</h4>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="member-code" placeholder="Введите код участника" style="flex: 1;">
+                    <button id="add-member-by-code" class="btn btn-primary">Добавить</button>
+                </div>
+            </div>
+        ` : '';
         
         Swal.fire({
             title: group.name,
             html: `
                 <div style="text-align: left;">
                     <p><strong>Лидер:</strong> ${this.escapeHtml(group.leader_name)}</p>
-                    ${group.description ? `<p><strong>Описание:</strong> ${this.escapeHtml(group.description)}</p>` : ''}
+                    ${group.description ? '<p><strong>Описание:</strong> ' + this.escapeHtml(group.description) + '</p>' : ''}
                     <p><strong>Создан:</strong> ${new Date(group.created_at).toLocaleDateString('ru-RU')}</p>
                     <hr>
                     <h3>Участники (${members.length})</h3>
                     <div class="group-members-list">
-                        ${members.map(m => `
-                            <div class="member-item">
-                                <div>
-                                    <strong>${this.escapeHtml(m.last_name)} ${this.escapeHtml(m.first_name)}</strong>
-                                    ${m.patronymic ? ` ${this.escapeHtml(m.patronymic)}` : ''}
-                                    <span class="member-role">${m.role === 'leader' ? '👑 Лидер' : '💃 Участник'}</span>
-                                    <div class="member-code">Код: ${m.unique_code}</div>
-                                </div>
-                                ${isLeader && m.id !== window.currentProfile.id ? `
-                                    <button class="btn btn-danger remove-member-btn" data-user-id="${m.id}" style="padding: 5px 10px; font-size: 12px;">
-                                        <i class="fas fa-user-minus"></i>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        `).join('')}
+                        ${membersHtml}
                     </div>
-                    ${isLeader ? `
-                        <hr>
-                        <div class="add-member-section">
-                            <h4>Добавить участника</h4>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="text" id="member-code" placeholder="Введите код участника" style="flex: 1;">
-                                <button id="add-member-by-code" class="btn btn-primary">Добавить</button>
-                            </div>
-                        </div>
-                    ` : ''}
+                    ${addMemberSection}
                 </div>
             `,
             width: '600px',
@@ -509,7 +522,6 @@ window.Groups = {
                                 return;
                             }
                             
-                            // Находим пользователя по коду
                             const user = window.allUsers.find(u => u.unique_code === code);
                             if (!user) {
                                 Swal.fire('Ошибка', 'Участник с таким кодом не найден', 'error');
@@ -519,7 +531,6 @@ window.Groups = {
                             try {
                                 await this.addMemberToGroup(groupId, user.id);
                                 Swal.fire('Успех!', 'Участник добавлен', 'success');
-                                // Обновляем просмотр
                                 this.viewGroup(groupId);
                             } catch (err) {
                                 Swal.fire('Ошибка', err.message, 'error');
@@ -527,7 +538,6 @@ window.Groups = {
                         });
                     }
                     
-                    // Обработчики удаления участников
                     document.querySelectorAll('.remove-member-btn').forEach(btn => {
                         btn.addEventListener('click', async (e) => {
                             e.stopPropagation();
@@ -572,7 +582,7 @@ window.Groups = {
         const refreshBtn = document.getElementById('refreshGroupsBtn');
         if (refreshBtn) {
             refreshBtn.addEventListener('click', async () => {
-                await this.loadGroups();
+                await this.loadUserGroups();
                 await this.renderDashboard();
             });
         }
@@ -591,7 +601,6 @@ window.Groups = {
         const manageMembersBtn = document.getElementById('manageMembersBtn');
         if (manageMembersBtn) {
             manageMembersBtn.addEventListener('click', () => {
-                // Переключаемся на управление участниками
                 if (window.Users && window.Users.renderUsersTable) {
                     window.Users.renderUsersTable();
                 }
@@ -625,7 +634,7 @@ window.Groups = {
                 const groupId = btn.dataset.groupId;
                 const result = await Swal.fire({
                     title: 'Удалить коллектив?',
-                    text: 'Это действие нельзя отменить',
+                    text: 'Это действие нельзя отменить. Все участники будут удалены из коллектива.',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonText: 'Да, удалить',
