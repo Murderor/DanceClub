@@ -1,23 +1,20 @@
 // Модуль профиля пользователя с календарём
 window.Profile = {
-    currentWeekStart: null, // дата понедельника текущей недели
-    events: [],              // все события за неделю
+    currentWeekStart: null,
+    events: [],
     
-    // Отображение страницы профиля
     async showProfilePage() {
         console.log('👤 Открываем страницу профиля');
         const mainContainer = document.getElementById('main-container');
         if (!mainContainer) return;
         
-        // Устанавливаем текущую неделю (понедельник текущей недели)
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0 = воскресенье
+        const dayOfWeek = today.getDay();
         const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
         this.currentWeekStart = new Date(today);
         this.currentWeekStart.setDate(today.getDate() - diffToMonday);
         this.currentWeekStart.setHours(0, 0, 0, 0);
         
-        // Загружаем события за текущую неделю
         await this.loadEvents();
         
         const profile = window.currentProfile;
@@ -26,9 +23,7 @@ window.Profile = {
             return;
         }
         
-        // Сохраняем текущий вид
         window.currentView = 'profile';
-        
         const userName = profile.nickname || (profile.last_name + ' ' + profile.first_name);
         const isAdmin = profile.role === 'admin';
         
@@ -63,11 +58,11 @@ window.Profile = {
                 
                 <div class="week-navigation" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <button class="btn btn-secondary" id="prevWeekBtn">
-                        <i class="fas fa-chevron-left"></i> Предыдущая неделя
+                        <i class="fas fa-chevron-left"></i> Предыдущая
                     </button>
                     <h3>${this.formatWeekRange()}</h3>
                     <button class="btn btn-secondary" id="nextWeekBtn">
-                        Следующая неделя <i class="fas fa-chevron-right"></i>
+                        Следующая <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
                 
@@ -78,9 +73,38 @@ window.Profile = {
         `;
         
         this.bindProfileEvents();
+        
+        // Применяем мобильную прокрутку, если нужно
+        this.applyMobileScroll();
     },
     
-    // Форматирование диапазона недели для отображения
+    applyMobileScroll() {
+        const calendarGrid = document.querySelector('.calendar-grid');
+        if (window.innerWidth <= 768 && calendarGrid) {
+            calendarGrid.style.display = 'flex';
+            calendarGrid.style.overflowX = 'auto';
+            calendarGrid.style.gap = '12px';
+            calendarGrid.style.paddingBottom = '10px';
+            calendarGrid.style.scrollSnapType = 'x mandatory';
+            calendarGrid.style.WebkitOverflowScrolling = 'touch';
+            
+            const days = calendarGrid.querySelectorAll('.calendar-day');
+            days.forEach(day => {
+                day.style.flex = '0 0 280px';
+                day.style.scrollSnapAlign = 'start';
+            });
+        } else if (calendarGrid) {
+            calendarGrid.style.display = 'grid';
+            calendarGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+            calendarGrid.style.overflowX = 'visible';
+            const days = calendarGrid.querySelectorAll('.calendar-day');
+            days.forEach(day => {
+                day.style.flex = '';
+                day.style.scrollSnapAlign = '';
+            });
+        }
+    },
+    
     formatWeekRange() {
         const start = new Date(this.currentWeekStart);
         const end = new Date(start);
@@ -91,7 +115,6 @@ window.Profile = {
         return `${formatDate(start)} — ${formatDate(end)}`;
     },
     
-    // Рендеринг дней недели
     renderWeekDays() {
         let daysHtml = '';
         const weekDays = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -103,7 +126,6 @@ window.Profile = {
             const dayOfMonth = currentDate.getDate();
             const dayOfWeek = weekDays[i];
             
-            // Получаем события на этот день
             const dayEvents = this.events.filter(e => e.date === dateStr);
             let eventsHtml = '';
             for (const ev of dayEvents) {
@@ -139,12 +161,10 @@ window.Profile = {
         return daysHtml;
     },
     
-    // Загрузка событий за текущую неделю
     async loadEvents() {
         const supabase = window.initSupabase();
         if (!supabase) return;
         
-        // Вычисляем начало и конец недели
         const startDate = new Date(this.currentWeekStart);
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + 6);
@@ -169,31 +189,27 @@ window.Profile = {
         this.events = data || [];
     },
     
-    // Перерисовать календарь
     async refreshCalendar() {
         await this.loadEvents();
         const container = document.querySelector('.calendar-grid');
         if (container) {
             container.innerHTML = this.renderWeekDays();
             this.attachDayEvents();
+            this.applyMobileScroll();
         }
         const weekRangeEl = document.querySelector('.week-navigation h3');
         if (weekRangeEl) weekRangeEl.textContent = this.formatWeekRange();
     },
     
-    // Привязка событий к дням (после перерисовки)
     attachDayEvents() {
-        // Обработка клика по дню (открыть модалку для добавления)
         document.querySelectorAll('.calendar-day').forEach(day => {
             const date = day.dataset.date;
             day.addEventListener('click', (e) => {
-                // Предотвращаем срабатывание, если кликнули на кнопку добавления или удаления
                 if (e.target.closest('.add-event-btn') || e.target.closest('.delete-event-btn')) return;
                 this.showEventModal(date);
             });
         });
         
-        // Кнопки добавления события
         document.querySelectorAll('.add-event-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -202,7 +218,6 @@ window.Profile = {
             });
         });
         
-        // Кнопки удаления события
         document.querySelectorAll('.delete-event-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -223,9 +238,7 @@ window.Profile = {
         });
     },
     
-    // Показать модалку добавления/редактирования события
     async showEventModal(date) {
-        // Загружаем существующие события на эту дату
         const dayEvents = this.events.filter(e => e.date === date);
         const supabase = window.initSupabase();
         
@@ -268,7 +281,6 @@ window.Profile = {
                     return false;
                 }
                 
-                // Проверяем пересечения с другими событиями в этот день
                 const overlapping = dayEvents.some(ev => {
                     return (startTime < ev.end_time && endTime > ev.start_time);
                 });
@@ -277,7 +289,6 @@ window.Profile = {
                     return false;
                 }
                 
-                // Сохраняем
                 const { data, error } = await supabase
                     .from('user_schedule')
                     .insert([{
@@ -303,7 +314,6 @@ window.Profile = {
         });
     },
     
-    // Удаление события
     async deleteEvent(eventId) {
         const supabase = window.initSupabase();
         if (!supabase) return;
@@ -319,7 +329,6 @@ window.Profile = {
         }
     },
     
-    // Показать модалку редактирования профиля
     showEditProfileModal() {
         const profile = window.currentProfile;
         Swal.fire({
@@ -383,13 +392,12 @@ window.Profile = {
             }
         }).then(async (result) => {
             if (result.isConfirmed && result.value) {
-                await this.showProfilePage(); // обновляем страницу
+                await this.showProfilePage();
                 Swal.fire('Успех!', 'Профиль обновлён', 'success');
             }
         });
     },
     
-    // Привязка событий на странице
     bindProfileEvents() {
         const backBtn = document.getElementById('backToDashboardBtn');
         if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());

@@ -893,3 +893,141 @@ tr:hover td {
 .error-shake {
     animation: shake 0.4s ease-in-out;
 }
+
+/* Мобильная адаптация для страницы профиля и календаря */
+@media (max-width: 768px) {
+    .profile-container {
+        padding: 0 5px;
+    }
+    
+    .calendar-grid {
+        display: flex;
+        overflow-x: auto;
+        gap: 12px;
+        padding-bottom: 10px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .calendar-day {
+        flex: 0 0 280px;
+        scroll-snap-align: start;
+        min-height: 220px;
+    }
+    
+    .week-navigation {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .week-navigation button {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .week-navigation h3 {
+        font-size: 14px;
+        order: 2;
+        width: 100%;
+        text-align: center;
+        margin: 5px 0;
+    }
+    
+    .profile-header {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 15px;
+    }
+    
+    .profile-header h2 {
+        font-size: 20px;
+        text-align: center;
+    }
+    
+    .profile-header button {
+        width: 100%;
+    }
+    
+    .main-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .user-info {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .user-info button {
+        min-width: 120px;
+    }
+    
+    .stats-cards {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .stat-card {
+        padding: 15px;
+    }
+    
+    .action-bar {
+        flex-direction: column;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    .groups-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .group-card-actions {
+        flex-direction: column;
+    }
+    
+    .group-card-actions button {
+        width: 100%;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 20px;
+        max-height: 85vh;
+    }
+    
+    .member-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .member-item > div:last-child {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    table {
+        min-width: 600px;
+    }
+    
+    th, td {
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+    
+    .auth-wrapper {
+        margin: 20px;
+        padding: 20px;
+    }
+}
