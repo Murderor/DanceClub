@@ -104,7 +104,8 @@ window.Auth = {
             patronymic: metadata.patronymic || null,
             birth_date: metadata.birth_date || null,
             unique_code: uniqueCode,
-            role: 'user'
+            role: 'user',
+            nickname: metadata.nickname || null  // добавлено поле nickname
         };
         
         console.log('📝 Данные для создания:', userData);
@@ -218,6 +219,10 @@ window.Auth = {
                         <input type="date" id="reg-birthdate" required>
                     </div>
                     <div class="form-row">
+                        <label>Никнейм (будет отображаться вместо имени)</label>
+                        <input type="text" id="reg-nickname" placeholder="Ваш никнейм (необязательно)">
+                    </div>
+                    <div class="form-row">
                         <label>Email *</label>
                         <input type="email" id="reg-email" placeholder="example@mail.com" required>
                     </div>
@@ -293,6 +298,7 @@ window.Auth = {
                 const firstName = document.getElementById('reg-firstname').value.trim();
                 const patronymic = document.getElementById('reg-patronymic').value.trim();
                 const birthDate = document.getElementById('reg-birthdate').value;
+                const nickname = document.getElementById('reg-nickname').value.trim() || null;
                 const email = document.getElementById('reg-email').value.trim();
                 const password = document.getElementById('reg-password').value;
                 
@@ -326,7 +332,8 @@ window.Auth = {
                             last_name: lastName,
                             first_name: firstName,
                             patronymic: patronymic || null,
-                            birth_date: birthDate
+                            birth_date: birthDate,
+                            nickname: nickname
                         } 
                     }
                 });

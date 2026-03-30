@@ -49,7 +49,8 @@ window.Users = {
             patronymic: userData.patronymic || null,
             birth_date: userData.birth_date,
             unique_code: uniqueCode,
-            role: 'user'
+            role: 'user',
+            nickname: userData.nickname || null
         };
         
         const { data, error } = await supabase
@@ -207,18 +208,23 @@ window.Users = {
     },
     
     renderUsersTable(searchTerm = '') {
-
         this.showBackToDashboard();
         const mainContainer = document.getElementById('main-container');
         if (!mainContainer) return;
         
-        const tableContainer = mainContainer.querySelector('.table-container');
-        if (!tableContainer) return;
+        // Проверяем, существует ли таблица, иначе создаём её
+        let tableContainer = mainContainer.querySelector('.table-container');
+        if (!tableContainer) {
+            // Если таблицы нет, значит, мы на дашборде – нужно перерисовать дашборд с таблицей
+            // Проще вызвать специальный метод для отображения только таблицы
+            this.renderFullUsersTable(searchTerm);
+            return;
+        }
         
         if (!window.allUsers || window.allUsers.length === 0) {
             const tbody = tableContainer.querySelector('tbody');
             if (tbody) {
-                tbody.innerHTML = '<tr class="empty-row"><td colspan="8">😢 Нет участников. Добавьте первого участника!</td></tr>';
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="6">😢 Нет участников. Добавьте первого участника!</td></tr>';
             }
             this.updateStats();
             return;
@@ -228,11 +234,11 @@ window.Users = {
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filteredUsers = window.allUsers.filter(user => 
-                (user.first_name?.toLowerCase() || '').includes(term) ||
+                (user.nickname?.toLowerCase() || '').includes(term) ||
                 (user.last_name?.toLowerCase() || '').includes(term) ||
+                (user.first_name?.toLowerCase() || '').includes(term) ||
                 (user.unique_code?.toLowerCase() || '').includes(term) ||
-                (user.email?.toLowerCase() || '').includes(term) ||
-                (user.patronymic?.toLowerCase() || '').includes(term)
+                (user.email?.toLowerCase() || '').includes(term)
             );
         }
         
@@ -240,7 +246,7 @@ window.Users = {
         if (!tbody) return;
         
         if (filteredUsers.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">😢 Нет участников, соответствующих запросу.</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="6">😢 Нет участников, соответствующих запросу.</td></tr>';
             return;
         }
         
@@ -248,14 +254,13 @@ window.Users = {
         for (const user of filteredUsers) {
             const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : '—';
             const isCurrentUser = window.currentProfile && user.id === window.currentProfile.id;
+            const displayName = user.nickname ? user.nickname : `${user.last_name} ${user.first_name}`;
             
             html += `
                 <tr ${isCurrentUser ? 'style="background: #fef3c7;"' : ''}>
                     <td>${isCurrentUser ? '👤 ' : ''}${user.id}</td>
                     <td><span class="user-code">${this.escapeHtml(user.unique_code || '—')}</span></td>
-                    <td>${this.escapeHtml(user.last_name || '')}</td>
-                    <td>${this.escapeHtml(user.first_name || '')}</td>
-                    <td>${this.escapeHtml(user.patronymic || '—')}</td>
+                    <td>${this.escapeHtml(displayName)}</td>
                     <td>${birthDate}</td>
                     <td>${this.escapeHtml(user.email || '—')}</td>
                     <td class="action-icons">
@@ -278,6 +283,93 @@ window.Users = {
         });
         
         this.updateStats();
+    },
+    
+    // Полная отрисовка страницы с таблицей
+    renderFullUsersTable(searchTerm = '') {
+        const mainContainer = document.getElementById('main-container');
+        if (!mainContainer) return;
+        
+        // Сохраняем текущий вид
+        window.currentView = 'members';
+        
+        mainContainer.innerHTML = `
+            <div class="main-header">
+                <div class="logo">
+                    <h1>💃 Танцевальный менеджер</h1>
+                    <p>Управление танцевальными коллективами</p>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">
+                        <i class="fas fa-user-circle"></i> ${this.escapeHtml(window.currentProfile?.last_name || '')} ${this.escapeHtml(window.currentProfile?.first_name || '')}
+                        ${window.currentProfile?.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + window.currentProfile.unique_code + '</span>' : ''}
+                    </span>
+                    <button class="btn btn-secondary" id="backToDashboardBtn">
+                        <i class="fas fa-arrow-left"></i> Назад к коллективам
+                    </button>
+                    <button class="logout-btn" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i> Выйти
+                    </button>
+                </div>
+            </div>
+            
+            <div class="action-bar">
+                <button class="btn btn-primary" id="addUserBtn">
+                    <i class="fas fa-user-plus"></i> Добавить участника
+                </button>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchUsersInput" placeholder="Поиск по имени, коду, email...">
+                </div>
+                <button class="btn btn-secondary" id="refreshUsersBtn">
+                    <i class="fas fa-sync-alt"></i> Обновить
+                </button>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Код</th>
+                            <th>Участник</th>
+                            <th>Дата рождения</th>
+                            <th>Email</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        `;
+        
+        // Привязываем события
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.addEventListener('click', () => window.Auth.logout());
+        
+        const backBtn = document.getElementById('backToDashboardBtn');
+        if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());
+        
+        const addBtn = document.getElementById('addUserBtn');
+        if (addBtn) addBtn.addEventListener('click', () => this.showAddModal());
+        
+        const refreshBtn = document.getElementById('refreshUsersBtn');
+        if (refreshBtn) refreshBtn.addEventListener('click', async () => {
+            await this.loadUsers();
+            this.renderUsersTable();
+        });
+        
+        const searchInput = document.getElementById('searchUsersInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.renderUsersTable(e.target.value);
+            });
+        }
+        
+        // Загружаем данные и рендерим таблицу
+        this.loadUsers().then(() => {
+            this.renderUsersTable(searchTerm);
+        });
     },
     
     escapeHtml(str) {
@@ -317,6 +409,10 @@ window.Users = {
                     <input type="text" id="addPatronymic" placeholder="Сергеевна">
                 </div>
                 <div class="form-group">
+                    <label>Никнейм (будет отображаться вместо имени)</label>
+                    <input type="text" id="addNickname" placeholder="Ваш никнейм (необязательно)">
+                </div>
+                <div class="form-group">
                     <label>Дата рождения *</label>
                     <input type="date" id="addBirthDate">
                 </div>
@@ -341,6 +437,7 @@ window.Users = {
             const lastName = modal.querySelector('#addLastName').value.trim();
             const firstName = modal.querySelector('#addFirstName').value.trim();
             const patronymic = modal.querySelector('#addPatronymic').value.trim();
+            const nickname = modal.querySelector('#addNickname').value.trim() || null;
             const birthDate = modal.querySelector('#addBirthDate').value;
             const email = modal.querySelector('#addEmail').value.trim();
             
@@ -354,7 +451,8 @@ window.Users = {
                 first_name: firstName, 
                 patronymic, 
                 birth_date: birthDate,
-                email: email
+                email: email,
+                nickname: nickname
             });
             modal.remove();
             this.renderUsersTable();
@@ -390,6 +488,10 @@ window.Users = {
                     <input type="text" id="editPatronymic" value="${this.escapeHtml(user.patronymic || '')}">
                 </div>
                 <div class="form-group">
+                    <label>Никнейм (будет отображаться вместо имени)</label>
+                    <input type="text" id="editNickname" value="${this.escapeHtml(user.nickname || '')}">
+                </div>
+                <div class="form-group">
                     <label>Дата рождения *</label>
                     <input type="date" id="editBirthDate" value="${user.birth_date || ''}">
                 </div>
@@ -418,10 +520,11 @@ window.Users = {
             const lastName = modal.querySelector('#editLastName').value.trim();
             const firstName = modal.querySelector('#editFirstName').value.trim();
             const patronymic = modal.querySelector('#editPatronymic').value.trim();
+            const nickname = modal.querySelector('#editNickname').value.trim() || null;
             const birthDate = modal.querySelector('#editBirthDate').value;
             const email = modal.querySelector('#editEmail').value.trim();
             
-            console.log('📝 Сохраняем изменения:', { lastName, firstName, patronymic, birthDate, email });
+            console.log('📝 Сохраняем изменения:', { lastName, firstName, patronymic, nickname, birthDate, email });
             
             if (!lastName || !firstName || !birthDate || !email) {
                 Swal.fire('Ошибка', 'Заполните обязательные поля', 'warning');
@@ -433,6 +536,7 @@ window.Users = {
                 last_name: lastName,
                 first_name: firstName,
                 patronymic: patronymic || null,
+                nickname: nickname,
                 birth_date: birthDate,
                 email: email
             });
@@ -443,17 +547,9 @@ window.Users = {
             }
         };
     },
+    
     showBackToDashboard() {
-        const actionBar = document.querySelector('.action-bar');
-        if (actionBar && !document.getElementById('backToDashboardBtn')) {
-            const backBtn = document.createElement('button');
-            backBtn.id = 'backToDashboardBtn';
-            backBtn.className = 'btn btn-secondary';
-            backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> Назад к коллективам';
-            backBtn.onclick = () => {
-                window.Groups.renderDashboard();
-            };
-            actionBar.insertBefore(backBtn, actionBar.firstChild);
-        }
+        // Этот метод вызывается из renderUsersTable, но сейчас мы полностью перерисовываем страницу,
+        // поэтому кнопка "Назад" уже есть в заголовке. Оставляем пустым для совместимости.
     }
 };

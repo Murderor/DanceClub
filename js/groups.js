@@ -67,7 +67,7 @@ window.Groups = {
             const userIds = memberships.map(m => m.user_id);
             const { data: users, error: usersError } = await supabase
                 .from('users')
-                .select('id, last_name, first_name, patronymic, unique_code, email')
+                .select('id, last_name, first_name, patronymic, unique_code, email, nickname, birth_date')
                 .in('id', userIds);
             
             if (usersError) throw usersError;
@@ -250,10 +250,11 @@ window.Groups = {
         await this.loadUserGroups();
         
         const userName = window.currentProfile ? 
-            window.currentProfile.last_name + ' ' + window.currentProfile.first_name : 
+            (window.currentProfile.nickname ? window.currentProfile.nickname : (window.currentProfile.last_name + ' ' + window.currentProfile.first_name)) :
             window.currentUser?.email || 'Пользователь';
         
         const userCode = window.currentProfile?.unique_code || '—';
+        const isAdmin = window.currentProfile?.role === 'admin';
         
         const leaderGroupsCount = this.userGroups.filter(g => this.isGroupLeader(g.id)).length;
         const totalGroupsCount = this.userGroups.length;
@@ -268,10 +269,16 @@ window.Groups = {
                     <span class="user-name">
                         <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
                         ${window.currentProfile?.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + window.currentProfile.unique_code + '</span>' : ''}
+                        ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;">👑 Админ</span>' : ''}
                     </span>
-                    <button class="btn btn-secondary" id="manageMembersBtn" style="background: #8b5cf6;">
-                        <i class="fas fa-users"></i> Все участники
+                    <button class="btn btn-secondary" id="profileBtn" style="background: #8b5cf6;">
+                        <i class="fas fa-user"></i> Профиль
                     </button>
+                    ${isAdmin ? `
+                        <button class="btn btn-secondary" id="manageMembersBtn" style="background: #8b5cf6;">
+                            <i class="fas fa-users"></i> Все участники
+                        </button>
+                    ` : ''}
                     <button class="logout-btn" id="logoutBtn">
                         <i class="fas fa-sign-out-alt"></i> Выйти
                     </button>
@@ -465,19 +472,27 @@ window.Groups = {
         
         let membersHtml = '';
         for (const m of members) {
-            const memberName = this.escapeHtml(m.last_name) + ' ' + this.escapeHtml(m.first_name) + (m.patronymic ? ' ' + this.escapeHtml(m.patronymic) : '');
+            const displayName = m.nickname ? m.nickname : `${m.last_name} ${m.first_name}`;
             const roleText = m.role === 'leader' ? '👑 Лидер' : '💃 Участник';
             const removeButton = (isLeader && m.id !== window.currentProfile.id) ? 
                 '<button class="btn btn-danger remove-member-btn" data-user-id="' + m.id + '" style="padding: 5px 10px; font-size: 12px;"><i class="fas fa-user-minus"></i></button>' : '';
             
+            // Кнопка просмотра информации доступна только лидеру
+            const infoButton = isLeader ? `<button class="btn btn-secondary info-member-btn" data-user-id="${m.id}" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;">
+                <i class="fas fa-info-circle"></i>
+            </button>` : '';
+            
             membersHtml += `
                 <div class="member-item">
                     <div>
-                        <strong>${memberName}</strong>
+                        <strong>${this.escapeHtml(displayName)}</strong>
                         <span class="member-role">${roleText}</span>
                         <div class="member-code">Код: ${m.unique_code}</div>
                     </div>
-                    ${removeButton}
+                    <div>
+                        ${infoButton}
+                        ${removeButton}
+                    </div>
                 </div>
             `;
         }
@@ -512,6 +527,7 @@ window.Groups = {
             showConfirmButton: true,
             confirmButtonText: 'Закрыть',
             didOpen: () => {
+                // Обработчик добавления участника
                 if (isLeader) {
                     const addBtn = document.getElementById('add-member-by-code');
                     if (addBtn) {
@@ -537,33 +553,69 @@ window.Groups = {
                             }
                         });
                     }
-                    
-                    document.querySelectorAll('.remove-member-btn').forEach(btn => {
-                        btn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            const userId = btn.dataset.userId;
-                            const result = await Swal.fire({
-                                title: 'Удалить участника?',
-                                text: 'Вы уверены?',
-                                icon: 'warning',
-                                showCancelButton: true,
-                                confirmButtonText: 'Да, удалить',
-                                cancelButtonText: 'Отмена'
-                            });
-                            
-                            if (result.isConfirmed) {
-                                try {
-                                    await this.removeMemberFromGroup(groupId, userId);
-                                    Swal.fire('Успех!', 'Участник удален', 'success');
-                                    this.viewGroup(groupId);
-                                } catch (err) {
-                                    Swal.fire('Ошибка', err.message, 'error');
-                                }
-                            }
-                        });
-                    });
                 }
+                
+                // Обработчик удаления участника
+                document.querySelectorAll('.remove-member-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const userId = btn.dataset.userId;
+                        const result = await Swal.fire({
+                            title: 'Удалить участника?',
+                            text: 'Вы уверены?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Да, удалить',
+                            cancelButtonText: 'Отмена'
+                        });
+                        
+                        if (result.isConfirmed) {
+                            try {
+                                await this.removeMemberFromGroup(groupId, userId);
+                                Swal.fire('Успех!', 'Участник удален', 'success');
+                                this.viewGroup(groupId);
+                            } catch (err) {
+                                Swal.fire('Ошибка', err.message, 'error');
+                            }
+                        }
+                    });
+                });
+                
+                // Обработчик просмотра информации об участнике (только если есть такие кнопки)
+                document.querySelectorAll('.info-member-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const userId = btn.dataset.userId;
+                        const user = members.find(m => m.id === userId);
+                        if (user) {
+                            this.showUserInfoModal(user);
+                        }
+                    });
+                });
             }
+        });
+    },
+    
+    // Показать модальное окно с полной информацией об участнике
+    showUserInfoModal(user) {
+        const fullName = `${user.last_name} ${user.first_name}${user.patronymic ? ' ' + user.patronymic : ''}`;
+        const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : 'Не указана';
+        
+        Swal.fire({
+            title: 'Информация об участнике',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Фамилия:</strong> ${this.escapeHtml(user.last_name)}</p>
+                    <p><strong>Имя:</strong> ${this.escapeHtml(user.first_name)}</p>
+                    <p><strong>Отчество:</strong> ${this.escapeHtml(user.patronymic || '—')}</p>
+                    <p><strong>Дата рождения:</strong> ${birthDate}</p>
+                    ${user.nickname ? `<p><strong>Никнейм:</strong> ${this.escapeHtml(user.nickname)}</p>` : ''}
+                    <p><strong>Код:</strong> ${this.escapeHtml(user.unique_code)}</p>
+                    <p><strong>Email:</strong> ${this.escapeHtml(user.email)}</p>
+                </div>
+            `,
+            icon: 'info',
+            confirmButtonText: 'Закрыть'
         });
     },
     
@@ -572,6 +624,26 @@ window.Groups = {
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => window.Auth.logout());
+        }
+        
+        const profileBtn = document.getElementById('profileBtn');
+        if (profileBtn) {
+            profileBtn.addEventListener('click', () => {
+                if (window.Profile && window.Profile.showProfilePage) {
+                    window.Profile.showProfilePage();
+                } else {
+                    console.error('Profile module not loaded');
+                }
+            });
+        }
+        
+        const manageMembersBtn = document.getElementById('manageMembersBtn');
+        if (manageMembersBtn) {
+            manageMembersBtn.addEventListener('click', () => {
+                if (window.Users && window.Users.renderFullUsersTable) {
+                    window.Users.renderFullUsersTable();
+                }
+            });
         }
         
         const createGroupBtn = document.getElementById('createGroupBtn');
@@ -594,15 +666,6 @@ window.Groups = {
                 if (groupsGrid) {
                     groupsGrid.innerHTML = this.renderGroupsCards(e.target.value);
                     this.bindGroupCardEvents();
-                }
-            });
-        }
-        
-        const manageMembersBtn = document.getElementById('manageMembersBtn');
-        if (manageMembersBtn) {
-            manageMembersBtn.addEventListener('click', () => {
-                if (window.Users && window.Users.renderUsersTable) {
-                    window.Users.renderUsersTable();
                 }
             });
         }
