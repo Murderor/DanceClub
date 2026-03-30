@@ -1031,3 +1031,167 @@ tr:hover td {
         padding: 20px;
     }
 }
+/* Календарь месяц */
+.calendar-month-grid {
+    background: #111118;
+    border-radius: 20px;
+    overflow-x: auto;
+    padding: 15px;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #a855f7;
+    border-bottom: 1px solid rgba(139,92,246,0.2);
+    padding-bottom: 10px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+
+.calendar-day {
+    background: #1a1a24;
+    border-radius: 12px;
+    padding: 10px 6px;
+    min-height: 100px;
+    position: relative;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.calendar-day.current-month:hover {
+    background: #2a2a35;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(139,92,246,0.2);
+}
+
+.calendar-day.other-month {
+    opacity: 0.4;
+    cursor: default;
+    background: #0f0f15;
+}
+
+.day-number {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 6px;
+    color: #e5e7eb;
+}
+
+.day-events {
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 20px;
+    max-height: 70px;
+    overflow-y: auto;
+}
+
+.event-badge {
+    background: rgba(139,92,246,0.15);
+    border-radius: 6px;
+    padding: 2px 4px;
+    margin-bottom: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: #c084fc;
+    word-break: break-word;
+}
+
+.event-badge .delete-event-btn {
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.event-badge:hover .delete-event-btn {
+    opacity: 1;
+}
+
+.no-events {
+    color: #6b7280;
+    font-size: 10px;
+    text-align: center;
+    padding: 5px 0;
+}
+
+.add-event-btn {
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    color: #8b5cf6;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.add-event-btn:hover {
+    transform: scale(1.1);
+    color: #c084fc;
+}
+
+/* Адаптация для мобильных */
+@media (max-width: 768px) {
+    .calendar-days {
+        gap: 4px;
+    }
+    
+    .calendar-day {
+        padding: 6px 3px;
+        min-height: 70px;
+    }
+    
+    .day-number {
+        font-size: 12px;
+    }
+    
+    .event-badge {
+        font-size: 8px;
+        padding: 1px 3px;
+    }
+    
+    .add-event-btn {
+        font-size: 12px;
+        bottom: 3px;
+        right: 4px;
+    }
+    
+    .calendar-weekdays .weekday {
+        font-size: 12px;
+    }
+    
+    .month-navigation {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .month-navigation button {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .profile-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .profile-header button {
+        width: 100%;
+    }
+    
+    .user-info {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .user-info .btn {
+        width: auto;
+    }
+}

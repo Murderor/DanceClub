@@ -1,20 +1,21 @@
-// Модуль профиля пользователя с календарём
+// Модуль профиля пользователя с календарём на месяц
 window.Profile = {
-    currentWeekStart: null,
-    events: [],
+    currentMonth: null,   // текущий месяц (Date, установлен на 1-е число)
+    currentYear: null,
+    events: [],           // все события за текущий месяц
     
+    // Отображение страницы профиля
     async showProfilePage() {
         console.log('👤 Открываем страницу профиля');
         const mainContainer = document.getElementById('main-container');
         if (!mainContainer) return;
         
+        // Устанавливаем текущий месяц
         const today = new Date();
-        const dayOfWeek = today.getDay();
-        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-        this.currentWeekStart = new Date(today);
-        this.currentWeekStart.setDate(today.getDate() - diffToMonday);
-        this.currentWeekStart.setHours(0, 0, 0, 0);
+        this.currentMonth = today.getMonth();
+        this.currentYear = today.getFullYear();
         
+        // Загружаем события за текущий месяц
         await this.loadEvents();
         
         const profile = window.currentProfile;
@@ -24,6 +25,7 @@ window.Profile = {
         }
         
         window.currentView = 'profile';
+        
         const userName = profile.nickname || (profile.last_name + ' ' + profile.first_name);
         const isAdmin = profile.role === 'admin';
         
@@ -49,135 +51,117 @@ window.Profile = {
             </div>
             
             <div class="profile-container">
-                <div class="profile-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div class="profile-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                     <h2 style="color: #a855f7;">Мой календарь</h2>
                     <button class="btn btn-primary" id="editProfileBtn">
                         <i class="fas fa-user-edit"></i> Редактировать профиль
                     </button>
                 </div>
                 
-                <div class="week-navigation" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <button class="btn btn-secondary" id="prevWeekBtn">
-                        <i class="fas fa-chevron-left"></i> Предыдущая
+                <div class="month-navigation" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                    <button class="btn btn-secondary" id="prevMonthBtn">
+                        <i class="fas fa-chevron-left"></i> Предыдущий
                     </button>
-                    <h3>${this.formatWeekRange()}</h3>
-                    <button class="btn btn-secondary" id="nextWeekBtn">
-                        Следующая <i class="fas fa-chevron-right"></i>
+                    <h3 style="margin: 0;">${this.getMonthName(this.currentMonth)} ${this.currentYear}</h3>
+                    <button class="btn btn-secondary" id="nextMonthBtn">
+                        Следующий <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
                 
-                <div class="calendar-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px;">
-                    ${this.renderWeekDays()}
+                <div class="calendar-month-grid">
+                    <div class="calendar-weekdays">
+                        ${['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(d => `<div class="weekday">${d}</div>`).join('')}
+                    </div>
+                    <div class="calendar-days" id="calendarDays">
+                        ${this.renderMonthDays()}
+                    </div>
                 </div>
             </div>
         `;
         
         this.bindProfileEvents();
+    },
+    
+    // Название месяца
+    getMonthName(month) {
+        const months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+        return months[month];
+    },
+    
+    // Рендеринг дней месяца
+    renderMonthDays() {
+        const firstDayOfMonth = new Date(this.currentYear, this.currentMonth, 1);
+        const startDayOfWeek = firstDayOfMonth.getDay(); // 0 = воскресенье
+        // Преобразуем к понедельнику как началу недели
+        let offset = (startDayOfWeek === 0 ? 6 : startDayOfWeek - 1);
         
-        // Применяем мобильную прокрутку, если нужно
-        this.applyMobileScroll();
-    },
-    
-    applyMobileScroll() {
-        const calendarGrid = document.querySelector('.calendar-grid');
-        if (window.innerWidth <= 768 && calendarGrid) {
-            calendarGrid.style.display = 'flex';
-            calendarGrid.style.overflowX = 'auto';
-            calendarGrid.style.gap = '12px';
-            calendarGrid.style.paddingBottom = '10px';
-            calendarGrid.style.scrollSnapType = 'x mandatory';
-            calendarGrid.style.WebkitOverflowScrolling = 'touch';
-            
-            const days = calendarGrid.querySelectorAll('.calendar-day');
-            days.forEach(day => {
-                day.style.flex = '0 0 280px';
-                day.style.scrollSnapAlign = 'start';
-            });
-        } else if (calendarGrid) {
-            calendarGrid.style.display = 'grid';
-            calendarGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-            calendarGrid.style.overflowX = 'visible';
-            const days = calendarGrid.querySelectorAll('.calendar-day');
-            days.forEach(day => {
-                day.style.flex = '';
-                day.style.scrollSnapAlign = '';
-            });
-        }
-    },
-    
-    formatWeekRange() {
-        const start = new Date(this.currentWeekStart);
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        const formatDate = (date) => {
-            return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-        };
-        return `${formatDate(start)} — ${formatDate(end)}`;
-    },
-    
-    renderWeekDays() {
+        const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
+        const daysInPrevMonth = new Date(this.currentYear, this.currentMonth, 0).getDate();
+        
         let daysHtml = '';
-        const weekDays = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
         
-        for (let i = 0; i < 7; i++) {
-            const currentDate = new Date(this.currentWeekStart);
-            currentDate.setDate(this.currentWeekStart.getDate() + i);
-            const dateStr = currentDate.toISOString().split('T')[0];
-            const dayOfMonth = currentDate.getDate();
-            const dayOfWeek = weekDays[i];
-            
+        // Пустые ячейки предыдущего месяца
+        for (let i = 0; i < offset; i++) {
+            const prevDate = daysInPrevMonth - offset + i + 1;
+            daysHtml += `<div class="calendar-day other-month">${prevDate}</div>`;
+        }
+        
+        // Дни текущего месяца
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${this.currentYear}-${String(this.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dayEvents = this.events.filter(e => e.date === dateStr);
+            
             let eventsHtml = '';
             for (const ev of dayEvents) {
-                const statusText = ev.status === 'free' ? '🟢 Свободен' : (ev.status === 'busy' ? '🔴 Занят' : '⚪ Неизвестно');
+                const statusText = ev.status === 'free' ? '🟢' : (ev.status === 'busy' ? '🔴' : '⚪');
                 eventsHtml += `
-                    <div class="event-item" style="background: rgba(139,92,246,0.1); border-radius: 8px; padding: 4px 8px; margin-top: 5px; font-size: 12px;">
-                        <div>${ev.start_time} — ${ev.end_time}</div>
-                        <div>${statusText}</div>
-                        <button class="delete-event-btn" data-event-id="${ev.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px;">
-                            <i class="fas fa-trash-alt"></i>
+                    <div class="event-badge" data-event-id="${ev.id}" title="${ev.start_time}—${ev.end_time} ${ev.status === 'free' ? 'Свободен' : (ev.status === 'busy' ? 'Занят' : 'Неизвестно')}">
+                        ${statusText} ${ev.start_time}—${ev.end_time}
+                        <button class="delete-event-btn" data-event-id="${ev.id}" data-date="${dateStr}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px; margin-left: 5px;">
+                            <i class="fas fa-times-circle"></i>
                         </button>
                     </div>
                 `;
             }
             
             daysHtml += `
-                <div class="calendar-day" data-date="${dateStr}" style="background: #111118; border-radius: 12px; padding: 12px; min-height: 180px; cursor: pointer; transition: all 0.2s;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong>${dayOfWeek}</strong>
-                        <span style="font-size: 18px; font-weight: bold;">${dayOfMonth}</span>
+                <div class="calendar-day current-month" data-date="${dateStr}">
+                    <div class="day-number">${d}</div>
+                    <div class="day-events">
+                        ${eventsHtml || '<div class="no-events">—</div>'}
                     </div>
-                    <div class="events-list" style="margin-top: 10px;">
-                        ${eventsHtml || '<div style="color: #6b7280; font-size: 12px;">Нет событий</div>'}
-                    </div>
-                    <div style="margin-top: 8px; text-align: center;">
-                        <button class="add-event-btn" data-date="${dateStr}" style="background: none; border: none; color: #8b5cf6; cursor: pointer; font-size: 12px;">
-                            <i class="fas fa-plus-circle"></i> Добавить
-                        </button>
+                    <div class="add-event-btn" data-date="${dateStr}" title="Добавить событие">
+                        <i class="fas fa-plus-circle"></i>
                     </div>
                 </div>
             `;
         }
+        
+        // Дополнительные ячейки следующего месяца для заполнения сетки
+        const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+        const remaining = totalCells - (offset + daysInMonth);
+        for (let i = 1; i <= remaining; i++) {
+            daysHtml += `<div class="calendar-day other-month">${i}</div>`;
+        }
+        
         return daysHtml;
     },
     
+    // Загрузка событий за текущий месяц
     async loadEvents() {
         const supabase = window.initSupabase();
         if (!supabase) return;
         
-        const startDate = new Date(this.currentWeekStart);
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        
-        const startStr = startDate.toISOString().split('T')[0];
-        const endStr = endDate.toISOString().split('T')[0];
+        const startDate = `${this.currentYear}-${String(this.currentMonth + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
+        const endDate = `${this.currentYear}-${String(this.currentMonth + 1).padStart(2, '0')}-${lastDay}`;
         
         const { data, error } = await supabase
             .from('user_schedule')
             .select('*')
             .eq('user_id', window.currentProfile.id)
-            .gte('date', startStr)
-            .lte('date', endStr)
+            .gte('date', startDate)
+            .lte('date', endDate)
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
         
@@ -189,20 +173,22 @@ window.Profile = {
         this.events = data || [];
     },
     
+    // Перерисовать календарь
     async refreshCalendar() {
         await this.loadEvents();
-        const container = document.querySelector('.calendar-grid');
-        if (container) {
-            container.innerHTML = this.renderWeekDays();
+        const daysContainer = document.getElementById('calendarDays');
+        if (daysContainer) {
+            daysContainer.innerHTML = this.renderMonthDays();
             this.attachDayEvents();
-            this.applyMobileScroll();
         }
-        const weekRangeEl = document.querySelector('.week-navigation h3');
-        if (weekRangeEl) weekRangeEl.textContent = this.formatWeekRange();
+        const monthHeader = document.querySelector('.month-navigation h3');
+        if (monthHeader) monthHeader.textContent = `${this.getMonthName(this.currentMonth)} ${this.currentYear}`;
     },
     
+    // Привязка событий к дням (после перерисовки)
     attachDayEvents() {
-        document.querySelectorAll('.calendar-day').forEach(day => {
+        // Клик по дню (не по кнопке)
+        document.querySelectorAll('.calendar-day.current-month').forEach(day => {
             const date = day.dataset.date;
             day.addEventListener('click', (e) => {
                 if (e.target.closest('.add-event-btn') || e.target.closest('.delete-event-btn')) return;
@@ -210,6 +196,7 @@ window.Profile = {
             });
         });
         
+        // Кнопки добавления события
         document.querySelectorAll('.add-event-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -218,10 +205,12 @@ window.Profile = {
             });
         });
         
+        // Кнопки удаления события
         document.querySelectorAll('.delete-event-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const eventId = btn.dataset.eventId;
+                const date = btn.dataset.date;
                 const result = await Swal.fire({
                     title: 'Удалить событие?',
                     text: 'Это действие нельзя отменить',
@@ -238,7 +227,9 @@ window.Profile = {
         });
     },
     
+    // Показать модалку добавления события
     async showEventModal(date) {
+        // Загружаем существующие события на эту дату
         const dayEvents = this.events.filter(e => e.date === date);
         const supabase = window.initSupabase();
         
@@ -281,6 +272,7 @@ window.Profile = {
                     return false;
                 }
                 
+                // Проверяем пересечения
                 const overlapping = dayEvents.some(ev => {
                     return (startTime < ev.end_time && endTime > ev.start_time);
                 });
@@ -314,6 +306,7 @@ window.Profile = {
         });
     },
     
+    // Удаление события
     async deleteEvent(eventId) {
         const supabase = window.initSupabase();
         if (!supabase) return;
@@ -329,6 +322,7 @@ window.Profile = {
         }
     },
     
+    // Показать модалку редактирования профиля
     showEditProfileModal() {
         const profile = window.currentProfile;
         Swal.fire({
@@ -398,6 +392,7 @@ window.Profile = {
         });
     },
     
+    // Привязка событий на странице
     bindProfileEvents() {
         const backBtn = document.getElementById('backToDashboardBtn');
         if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());
@@ -408,18 +403,28 @@ window.Profile = {
         const editProfileBtn = document.getElementById('editProfileBtn');
         if (editProfileBtn) editProfileBtn.addEventListener('click', () => this.showEditProfileModal());
         
-        const prevWeekBtn = document.getElementById('prevWeekBtn');
-        if (prevWeekBtn) {
-            prevWeekBtn.addEventListener('click', async () => {
-                this.currentWeekStart.setDate(this.currentWeekStart.getDate() - 7);
+        const prevMonthBtn = document.getElementById('prevMonthBtn');
+        if (prevMonthBtn) {
+            prevMonthBtn.addEventListener('click', async () => {
+                if (this.currentMonth === 0) {
+                    this.currentMonth = 11;
+                    this.currentYear--;
+                } else {
+                    this.currentMonth--;
+                }
                 await this.refreshCalendar();
             });
         }
         
-        const nextWeekBtn = document.getElementById('nextWeekBtn');
-        if (nextWeekBtn) {
-            nextWeekBtn.addEventListener('click', async () => {
-                this.currentWeekStart.setDate(this.currentWeekStart.getDate() + 7);
+        const nextMonthBtn = document.getElementById('nextMonthBtn');
+        if (nextMonthBtn) {
+            nextMonthBtn.addEventListener('click', async () => {
+                if (this.currentMonth === 11) {
+                    this.currentMonth = 0;
+                    this.currentYear++;
+                } else {
+                    this.currentMonth++;
+                }
                 await this.refreshCalendar();
             });
         }
