@@ -183,7 +183,7 @@ window.Auth = {
         
         authContainer.innerHTML = `
             <div class="auth-wrapper">
-                <h2>💃 Танцевальный менеджер</h2>
+                <h2>💃 DanceHub</h2>
                 <div class="auth-tabs">
                     <button class="auth-tab active" data-tab="login">Вход</button>
                     <button class="auth-tab" data-tab="register">Регистрация</button>

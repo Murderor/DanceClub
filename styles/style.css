@@ -560,83 +560,6 @@ tr:hover td {
     color: #6b7280;
 }
 
-/* Modal Styles */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: fadeIn 0.3s ease-out;
-}
-
-.modal-content {
-    background: #111118;
-    border-radius: 24px;
-    padding: 30px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    animation: bounce 0.3s ease-out;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-}
-
-.modal-content h3 {
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #c084fc, #a855f7);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    font-size: 24px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: #d1d5db;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 12px;
-    background: #1a1a24;
-    border: 2px solid #2a2a35;
-    border-radius: 12px;
-    font-size: 14px;
-    color: #e5e7eb;
-    transition: all 0.3s ease;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #a855f7;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 25px;
-}
-
 /* Group Cards Styles */
 .groups-grid {
     display: grid;
@@ -823,214 +746,6 @@ tr:hover td {
     color: #e5e7eb;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .main-header {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    .action-bar {
-        flex-direction: column;
-    }
-    
-    .search-box {
-        width: 100%;
-    }
-    
-    .search-box input {
-        width: 100%;
-    }
-    
-    th, td {
-        font-size: 12px;
-        padding: 8px;
-    }
-    
-    .stat-card {
-        padding: 15px;
-    }
-    
-    .auth-wrapper {
-        margin: 20px;
-        padding: 20px;
-    }
-    
-    .groups-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .group-card-actions {
-        flex-direction: column;
-    }
-    
-    .group-card-actions button {
-        width: 100%;
-    }
-    
-    .member-item {
-        flex-direction: column;
-        text-align: center;
-    }
-}
-
-/* Анимация загрузки */
-.loading-spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(139, 92, 246, 0.3);
-    border-top-color: #8b5cf6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-/* Эффект для ошибок */
-.error-shake {
-    animation: shake 0.4s ease-in-out;
-}
-
-/* Мобильная адаптация для страницы профиля и календаря */
-@media (max-width: 768px) {
-    .profile-container {
-        padding: 0 5px;
-    }
-    
-    .calendar-grid {
-        display: flex;
-        overflow-x: auto;
-        gap: 12px;
-        padding-bottom: 10px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .calendar-day {
-        flex: 0 0 280px;
-        scroll-snap-align: start;
-        min-height: 220px;
-    }
-    
-    .week-navigation {
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    
-    .week-navigation button {
-        padding: 8px 12px;
-        font-size: 14px;
-    }
-    
-    .week-navigation h3 {
-        font-size: 14px;
-        order: 2;
-        width: 100%;
-        text-align: center;
-        margin: 5px 0;
-    }
-    
-    .profile-header {
-        flex-direction: column;
-        align-items: stretch !important;
-        gap: 15px;
-    }
-    
-    .profile-header h2 {
-        font-size: 20px;
-        text-align: center;
-    }
-    
-    .profile-header button {
-        width: 100%;
-    }
-    
-    .main-header {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    .user-info {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .user-info button {
-        min-width: 120px;
-    }
-    
-    .stats-cards {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-    
-    .stat-card {
-        padding: 15px;
-    }
-    
-    .action-bar {
-        flex-direction: column;
-    }
-    
-    .search-box {
-        width: 100%;
-    }
-    
-    .search-box input {
-        width: 100%;
-    }
-    
-    .groups-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .group-card-actions {
-        flex-direction: column;
-    }
-    
-    .group-card-actions button {
-        width: 100%;
-    }
-    
-    .modal-content {
-        width: 95%;
-        padding: 20px;
-        max-height: 85vh;
-    }
-    
-    .member-item {
-        flex-direction: column;
-        text-align: center;
-        gap: 10px;
-    }
-    
-    .member-item > div:last-child {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-    }
-    
-    .table-container {
-        overflow-x: auto;
-    }
-    
-    table {
-        min-width: 600px;
-    }
-    
-    th, td {
-        padding: 10px 8px;
-        font-size: 12px;
-    }
-    
-    .auth-wrapper {
-        margin: 20px;
-        padding: 20px;
-    }
-}
 /* Календарь месяц */
 .calendar-month-grid {
     background: #111118;
@@ -1137,8 +852,223 @@ tr:hover td {
     color: #c084fc;
 }
 
-/* Адаптация для мобильных */
+/* Стили для календаря репетиций */
+.calendar-day.current-month.busy-day {
+    background: #3b1e1e !important;
+    border: 1px solid #ef4444;
+}
+.calendar-day.current-month.today {
+    border: 2px solid #8b5cf6;
+}
+
+/* Репетиции */
+.rehearsals-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+.rehearsals-list > div {
+    transition: background 0.2s;
+}
+.rehearsals-list > div:hover {
+    background: #2a2a35;
+}
+
+/* ========== ГЛОБАЛЬНЫЕ СТИЛИ ДЛЯ SWEETALERT2 (ТЁМНАЯ ТЕМА) ========== */
+.swal2-popup {
+    background: #111118 !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.swal2-title {
+    color: #f3f4f6 !important;
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, #c084fc, #a855f7) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+    color: transparent !important;
+}
+
+.swal2-html-container {
+    color: #d1d5db !important;
+}
+
+.swal2-input, .swal2-textarea, .swal2-select {
+    background: #1a1a24 !important;
+    border: 2px solid #2a2a35 !important;
+    border-radius: 12px !important;
+    color: #e5e7eb !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+}
+
+.swal2-input:focus, .swal2-textarea:focus, .swal2-select:focus {
+    border-color: #a855f7 !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2) !important;
+    outline: none !important;
+}
+
+.swal2-input::placeholder, .swal2-textarea::placeholder {
+    color: #6b7280 !important;
+}
+
+.swal2-confirm {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+.swal2-confirm:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 5px 20px rgba(139, 92, 246, 0.4) !important;
+}
+
+.swal2-cancel {
+    background: #1f1f2a !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    border-radius: 12px !important;
+    color: #e5e7eb !important;
+    font-weight: 600 !important;
+}
+
+.swal2-cancel:hover {
+    background: #2a2a35 !important;
+    transform: translateY(-2px) !important;
+}
+
+.swal2-icon {
+    border-color: #8b5cf6 !important;
+}
+
+.swal2-icon .swal2-icon-content {
+    color: #8b5cf6 !important;
+}
+
+.swal2-success-ring {
+    border-color: #8b5cf6 !important;
+}
+
+.swal2-success .swal2-success-line-tip,
+.swal2-success .swal2-success-line-long {
+    background-color: #8b5cf6 !important;
+}
+
+.swal2-warning {
+    border-color: #f59e0b !important;
+}
+
+.swal2-warning .swal2-icon-content {
+    color: #f59e0b !important;
+}
+
+.swal2-error {
+    border-color: #ef4444 !important;
+}
+
+.swal2-error .swal2-icon-content {
+    color: #ef4444 !important;
+}
+
+.swal2-validation-message {
+    background: #1a1a24 !important;
+    color: #ef4444 !important;
+    border-radius: 12px !important;
+}
+
+.swal2-actions {
+    gap: 12px !important;
+}
+
+.swal2-close {
+    color: #9ca3af !important;
+}
+
+.swal2-close:hover {
+    color: #ef4444 !important;
+}
+
+/* Стили для таблиц внутри SweetAlert */
+.swal2-html-container table {
+    background: #0a0a12 !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+.swal2-html-container th {
+    background: #1a1a24 !important;
+    color: #c084fc !important;
+    padding: 10px !important;
+}
+
+.swal2-html-container td {
+    background: #111118 !important;
+    color: #d1d5db !important;
+    padding: 8px 10px !important;
+    border-bottom: 1px solid #1f1f2a !important;
+}
+
+.swal2-html-container tr:last-child td {
+    border-bottom: none !important;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .main-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .action-bar {
+        flex-direction: column;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    th, td {
+        font-size: 12px;
+        padding: 8px;
+    }
+    
+    .stat-card {
+        padding: 15px;
+    }
+    
+    .auth-wrapper {
+        margin: 20px;
+        padding: 20px;
+    }
+    
+    .groups-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .group-card-actions {
+        flex-direction: column;
+    }
+    
+    .group-card-actions button {
+        width: 100%;
+    }
+    
+    .member-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
     .calendar-days {
         gap: 4px;
     }
@@ -1194,4 +1124,25 @@ tr:hover td {
     .user-info .btn {
         width: auto;
     }
+    
+    .swal2-popup {
+        width: 95% !important;
+        padding: 20px !important;
+    }
+}
+
+/* Анимация загрузки */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-top-color: #8b5cf6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Эффект для ошибок */
+.error-shake {
+    animation: shake 0.4s ease-in-out;
 }

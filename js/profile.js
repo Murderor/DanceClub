@@ -32,7 +32,7 @@ window.Profile = {
         mainContainer.innerHTML = `
             <div class="main-header">
                 <div class="logo">
-                    <h1>💃 Танцевальный менеджер</h1>
+                    <h1>💃 DanceHub</h1>
                     <p>Управление танцевальными коллективами</p>
                 </div>
                 <div class="user-info">
