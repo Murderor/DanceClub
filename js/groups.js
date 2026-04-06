@@ -321,26 +321,37 @@ window.Groups = {
         }
     },
     
-    // Получить статус занятости участника на конкретный интервал
+    // Получить статус занятости участника на конкретный интервал (с учётом времени)
     async getMemberStatusOnDate(userId, date, startTime, endTime) {
         const supabase = window.initSupabase();
-        if (!supabase) return null;
+        if (!supabase) return 'unknown';
         
+        // Ищем события, которые пересекаются с выбранным интервалом
         const { data, error } = await supabase
             .from('user_schedule')
             .select('status, start_time, end_time')
             .eq('user_id', userId)
-            .eq('date', date)
-            .or(`start_time.lte.${endTime},end_time.gte.${startTime}`);
+            .eq('date', date);
         
         if (error) {
             console.error('Ошибка получения статуса:', error);
-            return null;
+            return 'unknown';
         }
         
         if (!data || data.length === 0) return 'unknown';
-        if (data.some(ev => ev.status === 'busy')) return 'busy';
-        if (data.every(ev => ev.status === 'free')) return 'free';
+        
+        // Проверяем пересечение с каждым событием
+        for (const event of data) {
+            const eventStart = event.start_time;
+            const eventEnd = event.end_time;
+            
+            // Пересечение есть, если начало события < конец выбранного И конец события > начало выбранного
+            if (eventStart < endTime && eventEnd > startTime) {
+                if (event.status === 'busy') return 'busy';
+                if (event.status === 'free') return 'free';
+            }
+        }
+        
         return 'unknown';
     },
     
@@ -348,17 +359,29 @@ window.Groups = {
     async getMemberStatusSummary(groupId, date, startTime, endTime) {
         const members = await this.loadGroupMembers(groupId);
         const summary = [];
+        
         for (const member of members) {
             const status = await this.getMemberStatusOnDate(member.id, date, startTime, endTime);
             const displayName = member.nickname || `${member.last_name} ${member.first_name}`;
             let statusText = '', statusIcon = '';
+            
             switch(status) {
-                case 'free': statusText = 'Свободен'; statusIcon = '🟢'; break;
-                case 'busy': statusText = 'Занят'; statusIcon = '🔴'; break;
-                default: statusText = 'Неизвестно'; statusIcon = '⚪';
+                case 'free': 
+                    statusText = 'Свободен'; 
+                    statusIcon = '🟢'; 
+                    break;
+                case 'busy': 
+                    statusText = 'Занят'; 
+                    statusIcon = '🔴'; 
+                    break;
+                default: 
+                    statusText = 'Неизвестно'; 
+                    statusIcon = '⚪';
             }
+            
             summary.push({ name: displayName, statusText, statusIcon });
         }
+        
         return summary;
     },
     
@@ -418,281 +441,274 @@ window.Groups = {
         });
     },
     
-    // Показать календарь для выбора даты и времени репетиции (для лидера)
     // Показать календарь для выбора даты и времени репетиции (для лидера) - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
-async showScheduleRehearsalWithCalendar(groupId) {
-    const members = await this.loadGroupMembers(groupId);
-    if (!members.length) {
-        Swal.fire('Ошибка', 'В коллективе нет участников, нельзя назначить репетицию', 'warning');
-        return;
-    }
-    
-    let currentYear = new Date().getFullYear();
-    let currentMonth = new Date().getMonth();
-    let selectedDate = null;
-    let selectedStart = '18:00';
-    let selectedEnd = '20:00';
-    
-    // Кэш для занятых дней
-    let busyDaysCache = new Set();
-    
-    // Загружаем занятые дни за месяц ОДНИМ ЗАПРОСОМ
-    const loadBusyDaysForMonth = async (year, month) => {
-        const supabase = window.initSupabase();
-        if (!supabase) return new Set();
-        
-        const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const lastDay = new Date(year, month + 1, 0).getDate();
-        const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-        
-        const memberIds = members.map(m => m.id);
-        
-        const { data, error } = await supabase
-            .from('user_schedule')
-            .select('date')
-            .in('user_id', memberIds)
-            .eq('status', 'busy')
-            .gte('date', startDate)
-            .lte('date', endDate);
-        
-        if (error) {
-            console.error('Ошибка загрузки занятых дней:', error);
-            return new Set();
+    async showScheduleRehearsalWithCalendar(groupId) {
+        const members = await this.loadGroupMembers(groupId);
+        if (!members.length) {
+            Swal.fire('Ошибка', 'В коллективе нет участников, нельзя назначить репетицию', 'warning');
+            return;
         }
         
-        const busyDays = new Set();
-        if (data) {
-            data.forEach(record => {
-                const day = parseInt(record.date.split('-')[2]);
-                busyDays.add(day);
-            });
-        }
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth();
+        let selectedDate = null;
+        let selectedStart = '18:00';
+        let selectedEnd = '20:00';
         
-        return busyDays;
-    };
-    
-    // Рендеринг календаря
-    const renderCalendar = (busyDays) => {
-        const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-        const startWeekday = firstDayOfMonth.getDay();
-        let offset = (startWeekday === 0 ? 6 : startWeekday - 1);
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
+        // Кэш для занятых дней
+        let busyDaysCache = new Set();
         
-        let calendarHtml = '<div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7,1fr); text-align:center; margin-bottom:10px;">';
-        calendarHtml += ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(d => `<div class="weekday">${d}</div>`).join('');
-        calendarHtml += '</div><div class="calendar-days" style="display:grid; grid-template-columns:repeat(7,1fr); gap:5px;">';
-        
-        for (let i = 0; i < offset; i++) {
-            calendarHtml += `<div class="calendar-day other-month" style="opacity:0.4; padding:8px; text-align:center;">${daysInPrevMonth - offset + i + 1}</div>`;
-        }
-        
-        for (let d = 1; d <= daysInMonth; d++) {
-            const isBusyDay = busyDays.has(d);
-            const isToday = (currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth() && d === new Date().getDate());
-            calendarHtml += `
-                <div class="calendar-day current-month ${isBusyDay ? 'busy-day' : ''} ${isToday ? 'today' : ''}" data-date="${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}" style="padding:8px; text-align:center; cursor:pointer; background:#1a1a24; border-radius:8px; ${isBusyDay ? 'background:#3b1e1e;' : ''}">
-                    ${d}
-                    ${isBusyDay ? '<span style="display:block; font-size:10px;">🔴 заняты</span>' : ''}
-                </div>
-            `;
-        }
-        
-        const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
-        const remaining = totalCells - (offset + daysInMonth);
-        for (let i = 1; i <= remaining; i++) {
-            calendarHtml += `<div class="calendar-day other-month" style="opacity:0.4; padding:8px; text-align:center;">${i}</div>`;
-        }
-        calendarHtml += '</div>';
-        return calendarHtml;
-    };
-    
-    // Функция показа модального окна
-    const showModal = async (isMonthChange = false) => {
-        if (isMonthChange) {
-            // Показываем загрузку при смене месяца
-            Swal.fire({
-                title: 'Загрузка...',
-                html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Загружаем календарь...</p>',
-                showConfirmButton: false,
-                allowOutsideClick: false
-            });
+        // Загружаем занятые дни за месяц ОДНИМ ЗАПРОСОМ
+        const loadBusyDaysForMonth = async (year, month) => {
+            const supabase = window.initSupabase();
+            if (!supabase) return new Set();
             
-            busyDaysCache = await loadBusyDaysForMonth(currentYear, currentMonth);
-            Swal.close();
-        }
+            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+            
+            const memberIds = members.map(m => m.id);
+            
+            const { data, error } = await supabase
+                .from('user_schedule')
+                .select('date')
+                .in('user_id', memberIds)
+                .eq('status', 'busy')
+                .gte('date', startDate)
+                .lte('date', endDate);
+            
+            if (error) {
+                console.error('Ошибка загрузки занятых дней:', error);
+                return new Set();
+            }
+            
+            const busyDays = new Set();
+            if (data) {
+                data.forEach(record => {
+                    const day = parseInt(record.date.split('-')[2]);
+                    busyDays.add(day);
+                });
+            }
+            
+            return busyDays;
+        };
         
-        const calendarHtml = renderCalendar(busyDaysCache);
+        // Рендеринг календаря
+        const renderCalendar = (busyDays) => {
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+            const startWeekday = firstDayOfMonth.getDay();
+            let offset = (startWeekday === 0 ? 6 : startWeekday - 1);
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
+            
+            let calendarHtml = '<div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7,1fr); text-align:center; margin-bottom:10px;">';
+            calendarHtml += ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(d => `<div class="weekday">${d}</div>`).join('');
+            calendarHtml += '</div><div class="calendar-days" style="display:grid; grid-template-columns:repeat(7,1fr); gap:5px;">';
+            
+            for (let i = 0; i < offset; i++) {
+                calendarHtml += `<div class="calendar-day other-month" style="opacity:0.4; padding:8px; text-align:center;">${daysInPrevMonth - offset + i + 1}</div>`;
+            }
+            
+            for (let d = 1; d <= daysInMonth; d++) {
+                const isBusyDay = busyDays.has(d);
+                const isToday = (currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth() && d === new Date().getDate());
+                calendarHtml += `
+                    <div class="calendar-day current-month ${isBusyDay ? 'busy-day' : ''} ${isToday ? 'today' : ''}" data-date="${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}" style="padding:8px; text-align:center; cursor:pointer; background:#1a1a24; border-radius:8px; ${isBusyDay ? 'background:#3b1e1e;' : ''}">
+                        ${d}
+                        ${isBusyDay ? '<span style="display:block; font-size:10px;">🔴 есть занятые</span>' : ''}
+                    </div>
+                `;
+            }
+            
+            const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+            const remaining = totalCells - (offset + daysInMonth);
+            for (let i = 1; i <= remaining; i++) {
+                calendarHtml += `<div class="calendar-day other-month" style="opacity:0.4; padding:8px; text-align:center;">${i}</div>`;
+            }
+            calendarHtml += '</div>';
+            return calendarHtml;
+        };
         
-        const result = await Swal.fire({
-            title: 'Назначить репетицию',
-            html: `
-                <div style="text-align:center;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <button id="prevMonthBtn" class="btn btn-secondary" style="padding:5px 10px;"><i class="fas fa-chevron-left"></i></button>
-                        <h3 style="margin:0;">${new Date(currentYear, currentMonth).toLocaleString('ru', {month:'long', year:'numeric'})}</h3>
-                        <button id="nextMonthBtn" class="btn btn-secondary" style="padding:5px 10px;"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                    ${calendarHtml}
-                    <hr style="margin:15px 0;">
-                    <div class="form-group">
-                        <label>Время начала</label>
-                        <input type="time" id="reh-start" step="60" value="${selectedStart}" class="swal2-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Время конца</label>
-                        <input type="time" id="reh-end" step="60" value="${selectedEnd}" class="swal2-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Место</label>
-                        <input type="text" id="reh-location" placeholder="Зал, адрес..." class="swal2-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Заметки</label>
-                        <textarea id="reh-notes" rows="2" placeholder="Что нужно подготовить..." class="swal2-textarea"></textarea>
-                    </div>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Далее →',
-            cancelButtonText: 'Отмена',
-            didOpen: () => {
-                // Выбор даты
-                document.querySelectorAll('.calendar-day.current-month').forEach(day => {
-                    day.addEventListener('click', () => {
-                        selectedDate = day.dataset.date;
-                        document.querySelectorAll('.calendar-day.current-month').forEach(d => d.style.border = 'none');
-                        day.style.border = '2px solid #8b5cf6';
-                    });
+        // Функция показа модального окна
+        const showModal = async (isMonthChange = false) => {
+            if (isMonthChange) {
+                Swal.fire({
+                    title: 'Загрузка...',
+                    html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Загружаем календарь...</p>',
+                    showConfirmButton: false,
+                    allowOutsideClick: false
                 });
                 
-                // Переключение месяцев
-                const prevBtn = document.getElementById('prevMonthBtn');
-                const nextBtn = document.getElementById('nextMonthBtn');
-                
-                if (prevBtn) {
-                    prevBtn.addEventListener('click', async () => {
-                        if (currentMonth === 0) {
-                            currentMonth = 11;
-                            currentYear--;
-                        } else {
-                            currentMonth--;
-                        }
-                        selectedDate = null;
-                        Swal.close();
-                        await showModal(true);
-                    });
-                }
-                
-                if (nextBtn) {
-                    nextBtn.addEventListener('click', async () => {
-                        if (currentMonth === 11) {
-                            currentMonth = 0;
-                            currentYear++;
-                        } else {
-                            currentMonth++;
-                        }
-                        selectedDate = null;
-                        Swal.close();
-                        await showModal(true);
-                    });
-                }
-                
-                // Сохраняем выбранные время
-                const saveTimeAndLocation = () => {
-                    selectedStart = document.getElementById('reh-start')?.value || selectedStart;
-                    selectedEnd = document.getElementById('reh-end')?.value || selectedEnd;
-                };
-                
-                const startInput = document.getElementById('reh-start');
-                const endInput = document.getElementById('reh-end');
-                if (startInput) startInput.addEventListener('change', saveTimeAndLocation);
-                if (endInput) endInput.addEventListener('change', saveTimeAndLocation);
-            },
-            preConfirm: () => {
-                const start = document.getElementById('reh-start').value;
-                const end = document.getElementById('reh-end').value;
-                if (!selectedDate) {
-                    Swal.showValidationMessage('Выберите дату');
-                    return false;
-                }
-                if (start >= end) {
-                    Swal.showValidationMessage('Время начала должно быть раньше окончания');
-                    return false;
-                }
-                return {
-                    date: selectedDate,
-                    startTime: start,
-                    endTime: end,
-                    location: document.getElementById('reh-location')?.value || '',
-                    notes: document.getElementById('reh-notes')?.value || ''
-                };
+                busyDaysCache = await loadBusyDaysForMonth(currentYear, currentMonth);
+                Swal.close();
             }
+            
+            const calendarHtml = renderCalendar(busyDaysCache);
+            
+            const result = await Swal.fire({
+                title: 'Назначить репетицию',
+                html: `
+                    <div style="text-align:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <button id="prevMonthBtn" class="btn btn-secondary" style="padding:5px 10px;"><i class="fas fa-chevron-left"></i></button>
+                            <h3 style="margin:0;">${new Date(currentYear, currentMonth).toLocaleString('ru', {month:'long', year:'numeric'})}</h3>
+                            <button id="nextMonthBtn" class="btn btn-secondary" style="padding:5px 10px;"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                        ${calendarHtml}
+                        <hr style="margin:15px 0;">
+                        <div class="form-group">
+                            <label>Время начала</label>
+                            <input type="time" id="reh-start" step="60" value="${selectedStart}" class="swal2-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Время конца</label>
+                            <input type="time" id="reh-end" step="60" value="${selectedEnd}" class="swal2-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Место</label>
+                            <input type="text" id="reh-location" placeholder="Зал, адрес..." class="swal2-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Заметки</label>
+                            <textarea id="reh-notes" rows="2" placeholder="Что нужно подготовить..." class="swal2-textarea"></textarea>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Далее →',
+                cancelButtonText: 'Отмена',
+                didOpen: () => {
+                    document.querySelectorAll('.calendar-day.current-month').forEach(day => {
+                        day.addEventListener('click', () => {
+                            selectedDate = day.dataset.date;
+                            document.querySelectorAll('.calendar-day.current-month').forEach(d => d.style.border = 'none');
+                            day.style.border = '2px solid #8b5cf6';
+                        });
+                    });
+                    
+                    const prevBtn = document.getElementById('prevMonthBtn');
+                    const nextBtn = document.getElementById('nextMonthBtn');
+                    
+                    if (prevBtn) {
+                        prevBtn.addEventListener('click', async () => {
+                            if (currentMonth === 0) {
+                                currentMonth = 11;
+                                currentYear--;
+                            } else {
+                                currentMonth--;
+                            }
+                            selectedDate = null;
+                            Swal.close();
+                            await showModal(true);
+                        });
+                    }
+                    
+                    if (nextBtn) {
+                        nextBtn.addEventListener('click', async () => {
+                            if (currentMonth === 11) {
+                                currentMonth = 0;
+                                currentYear++;
+                            } else {
+                                currentMonth++;
+                            }
+                            selectedDate = null;
+                            Swal.close();
+                            await showModal(true);
+                        });
+                    }
+                    
+                    const saveTimeAndLocation = () => {
+                        selectedStart = document.getElementById('reh-start')?.value || selectedStart;
+                        selectedEnd = document.getElementById('reh-end')?.value || selectedEnd;
+                    };
+                    
+                    const startInput = document.getElementById('reh-start');
+                    const endInput = document.getElementById('reh-end');
+                    if (startInput) startInput.addEventListener('change', saveTimeAndLocation);
+                    if (endInput) endInput.addEventListener('change', saveTimeAndLocation);
+                },
+                preConfirm: () => {
+                    const start = document.getElementById('reh-start').value;
+                    const end = document.getElementById('reh-end').value;
+                    if (!selectedDate) {
+                        Swal.showValidationMessage('Выберите дату');
+                        return false;
+                    }
+                    if (start >= end) {
+                        Swal.showValidationMessage('Время начала должно быть раньше окончания');
+                        return false;
+                    }
+                    return {
+                        date: selectedDate,
+                        startTime: start,
+                        endTime: end,
+                        location: document.getElementById('reh-location')?.value || '',
+                        notes: document.getElementById('reh-notes')?.value || ''
+                    };
+                }
+            });
+            
+            if (result.isConfirmed) {
+                const { date, startTime, endTime, location, notes } = result.value;
+                
+                Swal.fire({
+                    title: 'Загрузка...',
+                    html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Проверяем статусы участников...</p>',
+                    showConfirmButton: false,
+                    allowOutsideClick: false
+                });
+                
+                const summary = await this.getMemberStatusSummary(groupId, date, startTime, endTime);
+                Swal.close();
+                
+                const tableHtml = `
+                    <table style="width:100%; border-collapse: collapse; margin-top:10px;">
+                        <thead><tr><th>Участник</th><th>Статус</th></tr></thead>
+                        <tbody>
+                            ${summary.map(s => `<tr><td style="padding:8px;">${this.escapeHtml(s.name)}</td><td style="padding:8px;">${s.statusIcon} ${s.statusText}</td>`).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                const confirmResult = await Swal.fire({
+                    title: 'Подтверждение репетиции',
+                    html: `
+                        <p><strong>Дата:</strong> ${new Date(date).toLocaleDateString('ru-RU')}</p>
+                        <p><strong>Время:</strong> ${startTime} — ${endTime}</p>
+                        ${location ? `<p><strong>Место:</strong> ${this.escapeHtml(location)}</p>` : ''}
+                        ${notes ? `<p><strong>Заметки:</strong> ${this.escapeHtml(notes)}</p>` : ''}
+                        <p>Статус участников на выбранное время:</p>
+                        ${tableHtml}
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Назначить',
+                    cancelButtonText: 'Отмена'
+                });
+                
+                if (confirmResult.isConfirmed) {
+                    try {
+                        await this.createRehearsal(groupId, date, startTime, endTime, location, notes);
+                        Swal.fire('Успех!', 'Репетиция назначена', 'success');
+                        this.viewGroup(groupId);
+                    } catch (err) {
+                        Swal.fire('Ошибка', err.message, 'error');
+                    }
+                }
+            }
+        };
+        
+        Swal.fire({
+            title: 'Загрузка...',
+            html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Загружаем календарь...</p>',
+            showConfirmButton: false,
+            allowOutsideClick: false
         });
         
-        if (result.isConfirmed) {
-            const { date, startTime, endTime, location, notes } = result.value;
-            
-            // Показываем загрузку статусов
-            Swal.fire({
-                title: 'Загрузка...',
-                html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Проверяем статусы участников...</p>',
-                showConfirmButton: false,
-                allowOutsideClick: false
-            });
-            
-            const summary = await this.getMemberStatusSummary(groupId, date, startTime, endTime);
-            Swal.close();
-            
-            const tableHtml = `
-                <table style="width:100%; border-collapse: collapse; margin-top:10px;">
-                    <thead><tr><th>Участник</th><th>Статус</th></tr></thead>
-                    <tbody>
-                        ${summary.map(s => `<tr><td style="padding:8px;">${this.escapeHtml(s.name)}</td><td style="padding:8px;">${s.statusIcon} ${s.statusText}</td></tr>`).join('')}
-                    </tbody>
-                </table>
-            `;
-            
-            const confirmResult = await Swal.fire({
-                title: 'Подтверждение репетиции',
-                html: `
-                    <p><strong>Дата:</strong> ${new Date(date).toLocaleDateString('ru-RU')}</p>
-                    <p><strong>Время:</strong> ${startTime} — ${endTime}</p>
-                    ${location ? `<p><strong>Место:</strong> ${this.escapeHtml(location)}</p>` : ''}
-                    ${notes ? `<p><strong>Заметки:</strong> ${this.escapeHtml(notes)}</p>` : ''}
-                    <p>Статус участников:</p>
-                    ${tableHtml}
-                `,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Назначить',
-                cancelButtonText: 'Отмена'
-            });
-            
-            if (confirmResult.isConfirmed) {
-                try {
-                    await this.createRehearsal(groupId, date, startTime, endTime, location, notes);
-                    Swal.fire('Успех!', 'Репетиция назначена', 'success');
-                    this.viewGroup(groupId);
-                } catch (err) {
-                    Swal.fire('Ошибка', err.message, 'error');
-                }
-            }
-        }
-    };
-    
-    // Показываем загрузку при первом открытии
-    Swal.fire({
-        title: 'Загрузка...',
-        html: '<div class="loading-spinner" style="margin:20px auto;"></div><p>Загружаем календарь...</p>',
-        showConfirmButton: false,
-        allowOutsideClick: false
-    });
-    
-    busyDaysCache = await loadBusyDaysForMonth(currentYear, currentMonth);
-    Swal.close();
-    await showModal(false);
-},
+        busyDaysCache = await loadBusyDaysForMonth(currentYear, currentMonth);
+        Swal.close();
+        await showModal(false);
+    },
     
     // Отображение дашборда
     async renderDashboard() {
@@ -716,7 +732,7 @@ async showScheduleRehearsalWithCalendar(groupId) {
         mainContainer.innerHTML = `
             <div class="main-header">
                 <div class="logo">
-                    <h1>💃 DanceHub</h1>
+                    <h1>💃 Танцевальный менеджер</h1>
                     <p>Управление танцевальными коллективами</p>
                 </div>
                 <div class="user-info">
