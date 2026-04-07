@@ -293,8 +293,7 @@ window.Auth = {
                         <input type="text" id="reg-telegram-id" placeholder="123456789" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                         <small style="color:#6b7280; display: block; margin-top: 5px;">
                             <i class="fab fa-telegram"></i> 
-                            Напишите боту <a href="https://t.me/userinfobot" target="_blank" style="color: #8b5cf6;">@userinfobot</a> в Telegram, он пришлёт ваш ID.<br>
-                            Скопируйте число и вставьте сюда.
+                            Напишите боту <a href="https://t.me/userinfobot" target="_blank" style="color: #8b5cf6;">@userinfobot</a> в Telegram, он пришлёт ваш ID, скопируйте число и вставьте сюда. А затем /start нашему <a href="https://t.me/danceMogHub_bot" target="_blank" style="color: #8b5cf6;">@DanceHub</a>, чтобы получать уведомления.<br>
                         </small>
                     </div>
                     <div class="form-row">
