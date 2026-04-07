@@ -49,7 +49,7 @@ window.Users = {
             patronymic: userData.patronymic || null,
             birth_date: userData.birth_date,
             unique_code: uniqueCode,
-            role: 'user',
+            role: userData.role || 'user',
             nickname: userData.nickname || null
         };
         
@@ -212,11 +212,8 @@ window.Users = {
         const mainContainer = document.getElementById('main-container');
         if (!mainContainer) return;
         
-        // Проверяем, существует ли таблица, иначе создаём её
         let tableContainer = mainContainer.querySelector('.table-container');
         if (!tableContainer) {
-            // Если таблицы нет, значит, мы на дашборде – нужно перерисовать дашборд с таблицей
-            // Проще вызвать специальный метод для отображения только таблицы
             this.renderFullUsersTable(searchTerm);
             return;
         }
@@ -224,7 +221,7 @@ window.Users = {
         if (!window.allUsers || window.allUsers.length === 0) {
             const tbody = tableContainer.querySelector('tbody');
             if (tbody) {
-                tbody.innerHTML = '<tr class="empty-row"><td colspan="6">😢 Нет участников. Добавьте первого участника!</td></tr>';
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="7">😢 Нет участников. Добавьте первого участника!</td></tr>';
             }
             this.updateStats();
             return;
@@ -246,7 +243,7 @@ window.Users = {
         if (!tbody) return;
         
         if (filteredUsers.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="6">😢 Нет участников, соответствующих запросу.</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">😢 Нет участников, соответствующих запросу.</td></tr>';
             return;
         }
         
@@ -254,15 +251,23 @@ window.Users = {
         for (const user of filteredUsers) {
             const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : '—';
             const isCurrentUser = window.currentProfile && user.id === window.currentProfile.id;
-            const displayName = user.nickname ? user.nickname : `${user.last_name} ${user.first_name}`;
+            const displayName = user.nickname || `${user.last_name} ${user.first_name}`;
+            const isAdmin = user.role === 'admin';
+            
+            // Значок администратора
+            const adminBadge = isAdmin ? '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Админ</span>' : '';
             
             html += `
-                <tr ${isCurrentUser ? 'style="background: #fef3c7;"' : ''}>
-                    <td>${isCurrentUser ? '👤 ' : ''}${user.id}</td>
+                <tr ${isCurrentUser ? 'style="background: rgba(139, 92, 246, 0.1);"' : ''}>
+                    <td>${isCurrentUser ? '👤 ' : ''}${this.escapeHtml(displayName)} ${adminBadge}</td>
                     <td><span class="user-code">${this.escapeHtml(user.unique_code || '—')}</span></td>
-                    <td>${this.escapeHtml(displayName)}</td>
                     <td>${birthDate}</td>
                     <td>${this.escapeHtml(user.email || '—')}</td>
+                    <td>
+                        ${isAdmin ? 
+                            '<span style="color: #ef4444; font-weight: 600;"><i class="fas fa-shield-alt"></i> Администратор</span>' : 
+                            '<span style="color: #9ca3af;">Пользователь</span>'}
+                    </td>
                     <td class="action-icons">
                         <i class="fas fa-edit" data-id="${user.id}" title="Редактировать"></i>
                         ${!isCurrentUser ? '<i class="fas fa-trash-alt" data-id="' + user.id + '" title="Удалить"></i>' : ''}
@@ -273,7 +278,6 @@ window.Users = {
         
         tbody.innerHTML = html;
         
-        // Привязываем события
         tbody.querySelectorAll('.fa-edit').forEach(icon => {
             icon.addEventListener('click', () => this.openEditModal(icon.getAttribute('data-id')));
         });
@@ -290,8 +294,11 @@ window.Users = {
         const mainContainer = document.getElementById('main-container');
         if (!mainContainer) return;
         
-        // Сохраняем текущий вид
         window.currentView = 'members';
+        
+        const profile = window.currentProfile;
+        const userName = profile.nickname || `${profile.last_name} ${profile.first_name}`;
+        const isAdmin = profile.role === 'admin';
         
         mainContainer.innerHTML = `
             <div class="main-header">
@@ -301,11 +308,15 @@ window.Users = {
                 </div>
                 <div class="user-info">
                     <span class="user-name">
-                        <i class="fas fa-user-circle"></i> ${this.escapeHtml(window.currentProfile?.last_name || '')} ${this.escapeHtml(window.currentProfile?.first_name || '')}
-                        ${window.currentProfile?.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + window.currentProfile.unique_code + '</span>' : ''}
+                        <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
+                        ${profile.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + profile.unique_code + '</span>' : ''}
+                        ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;"><i class="fas fa-shield-alt"></i> Админ</span>' : ''}
                     </span>
                     <button class="btn btn-secondary" id="backToDashboardBtn">
                         <i class="fas fa-arrow-left"></i> Назад к коллективам
+                    </button>
+                    <button class="btn btn-secondary" id="profileBtn" style="background: #8b5cf6;">
+                        <i class="fas fa-user"></i> Профиль
                     </button>
                     <button class="logout-btn" id="logoutBtn">
                         <i class="fas fa-sign-out-alt"></i> Выйти
@@ -330,25 +341,35 @@ window.Users = {
                 <table>
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Код</th>
                             <th>Участник</th>
+                            <th>Код</th>
                             <th>Дата рождения</th>
                             <th>Email</th>
+                            <th>Роль</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody id="usersTableBody">
+                        ${this.renderUsersTableRows(window.allUsers, searchTerm)}
+                    </tbody>
                 </table>
             </div>
         `;
         
-        // Привязываем события
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) logoutBtn.addEventListener('click', () => window.Auth.logout());
         
         const backBtn = document.getElementById('backToDashboardBtn');
         if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());
+        
+        const profileBtn = document.getElementById('profileBtn');
+        if (profileBtn) {
+            profileBtn.addEventListener('click', () => {
+                if (window.Profile && window.Profile.showProfilePage) {
+                    window.Profile.showProfilePage();
+                }
+            });
+        }
         
         const addBtn = document.getElementById('addUserBtn');
         if (addBtn) addBtn.addEventListener('click', () => this.showAddModal());
@@ -356,20 +377,74 @@ window.Users = {
         const refreshBtn = document.getElementById('refreshUsersBtn');
         if (refreshBtn) refreshBtn.addEventListener('click', async () => {
             await this.loadUsers();
-            this.renderUsersTable();
+            this.renderFullUsersTable();
         });
         
         const searchInput = document.getElementById('searchUsersInput');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
-                this.renderUsersTable(e.target.value);
+                this.renderFullUsersTable(e.target.value);
             });
         }
         
-        // Загружаем данные и рендерим таблицу
         this.loadUsers().then(() => {
-            this.renderUsersTable(searchTerm);
+            this.renderFullUsersTable(searchTerm);
         });
+    },
+    
+    renderUsersTableRows(users, searchTerm = '') {
+        if (!users || users.length === 0) {
+            return '<tr class="empty-row"><td colspan="6">😢 Нет участников. Добавьте первого участника!</td></tr>';
+        }
+        
+        let filteredUsers = users;
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            filteredUsers = users.filter(user => 
+                (user.nickname?.toLowerCase() || '').includes(term) ||
+                (user.last_name?.toLowerCase() || '').includes(term) ||
+                (user.first_name?.toLowerCase() || '').includes(term) ||
+                (user.unique_code?.toLowerCase() || '').includes(term) ||
+                (user.email?.toLowerCase() || '').includes(term)
+            );
+        }
+        
+        if (filteredUsers.length === 0) {
+            return '<tr class="empty-row"><td colspan="6">😢 Нет участников, соответствующих запросу.</td></tr>';
+        }
+        
+        return filteredUsers.map(user => {
+            const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : '—';
+            const isCurrentUser = window.currentProfile && user.id === window.currentProfile.id;
+            const displayName = user.nickname || `${user.last_name} ${user.first_name}`;
+            const isAdmin = user.role === 'admin';
+            
+            // Значок администратора
+            const adminBadge = isAdmin ? '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Админ</span>' : '';
+            
+            return `
+                <tr ${isCurrentUser ? 'style="background: rgba(139, 92, 246, 0.1);"' : ''}>
+                    <td>
+                        ${isCurrentUser ? '👤 ' : ''}${this.escapeHtml(displayName)}
+                        ${adminBadge}
+                    </td>
+                    <td><span class="user-code">${this.escapeHtml(user.unique_code || '—')}</span></td>
+                    <td>${birthDate}</td>
+                    <td>${this.escapeHtml(user.email || '—')}</td>
+                    <td>
+                        ${isAdmin ? 
+                            '<span style="color: #ef4444; font-weight: 600;"><i class="fas fa-shield-alt"></i> Администратор</span>' : 
+                            '<span style="color: #9ca3af;">Пользователь</span>'}
+                    </td>
+                    <td>
+                        <div class="action-icons">
+                            <i class="fas fa-edit" onclick="window.Users.openEditModal('${user.id}')" title="Редактировать"></i>
+                            ${!isCurrentUser ? '<i class="fas fa-trash-alt" onclick="window.Users.deleteUser(\'' + user.id + '\')" title="Удалить"></i>' : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     },
     
     escapeHtml(str) {
@@ -420,6 +495,13 @@ window.Users = {
                     <label>Email *</label>
                     <input type="email" id="addEmail" placeholder="example@mail.com">
                 </div>
+                <div class="form-group">
+                    <label>Роль</label>
+                    <select id="addRole">
+                        <option value="user">Пользователь</option>
+                        <option value="admin">Администратор</option>
+                    </select>
+                </div>
                 <div class="modal-actions">
                     <button class="btn btn-secondary" id="cancelModal">Отмена</button>
                     <button class="btn btn-primary" id="confirmAdd">Добавить</button>
@@ -440,6 +522,7 @@ window.Users = {
             const nickname = modal.querySelector('#addNickname').value.trim() || null;
             const birthDate = modal.querySelector('#addBirthDate').value;
             const email = modal.querySelector('#addEmail').value.trim();
+            const role = modal.querySelector('#addRole').value;
             
             if (!lastName || !firstName || !birthDate || !email) {
                 Swal.fire('Ошибка', 'Заполните обязательные поля', 'warning');
@@ -452,10 +535,11 @@ window.Users = {
                 patronymic, 
                 birth_date: birthDate,
                 email: email,
-                nickname: nickname
+                nickname: nickname,
+                role: role
             });
             modal.remove();
-            this.renderUsersTable();
+            this.renderFullUsersTable();
         };
     },
     
@@ -500,8 +584,15 @@ window.Users = {
                     <input type="email" id="editEmail" value="${this.escapeHtml(user.email || '')}">
                 </div>
                 <div class="form-group">
+                    <label>Роль</label>
+                    <select id="editRole">
+                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Уникальный код</label>
-                    <input type="text" id="editUniqueCode" value="${user.unique_code}" readonly style="background:#f3f4f6;">
+                    <input type="text" id="editUniqueCode" value="${user.unique_code}" readonly style="background:#1a1a24; color:#9ca3af;">
                 </div>
                 <div class="modal-actions">
                     <button class="btn btn-secondary" id="cancelModal">Отмена</button>
@@ -523,33 +614,33 @@ window.Users = {
             const nickname = modal.querySelector('#editNickname').value.trim() || null;
             const birthDate = modal.querySelector('#editBirthDate').value;
             const email = modal.querySelector('#editEmail').value.trim();
+            const role = modal.querySelector('#editRole').value;
             
-            console.log('📝 Сохраняем изменения:', { lastName, firstName, patronymic, nickname, birthDate, email });
+            console.log('📝 Сохраняем изменения:', { lastName, firstName, patronymic, nickname, birthDate, email, role });
             
             if (!lastName || !firstName || !birthDate || !email) {
                 Swal.fire('Ошибка', 'Заполните обязательные поля', 'warning');
                 return;
             }
             
-            // Сохраняем изменения
             const success = await this.updateUser(userId, {
                 last_name: lastName,
                 first_name: firstName,
                 patronymic: patronymic || null,
                 nickname: nickname,
                 birth_date: birthDate,
-                email: email
+                email: email,
+                role: role
             });
             
             if (success) {
                 modal.remove();
-                this.renderUsersTable();
+                this.renderFullUsersTable();
             }
         };
     },
     
     showBackToDashboard() {
-        // Этот метод вызывается из renderUsersTable, но сейчас мы полностью перерисовываем страницу,
-        // поэтому кнопка "Назад" уже есть в заголовке. Оставляем пустым для совместимости.
+        // Для совместимости
     }
 };

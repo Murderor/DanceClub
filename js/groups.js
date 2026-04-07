@@ -67,7 +67,7 @@ window.Groups = {
             const userIds = memberships.map(m => m.user_id);
             const { data: users, error: usersError } = await supabase
                 .from('users')
-                .select('id, last_name, first_name, patronymic, unique_code, email, nickname, birth_date')
+                .select('id, last_name, first_name, patronymic, unique_code, email, nickname, birth_date, role')
                 .in('id', userIds);
             
             if (usersError) throw usersError;
@@ -76,7 +76,7 @@ window.Groups = {
                 const user = users.find(u => u.id === membership.user_id);
                 return {
                     ...user,
-                    role: membership.role,
+                    groupRole: membership.role,
                     joined_at: membership.joined_at
                 };
             });
@@ -284,6 +284,14 @@ window.Groups = {
             console.error('Ошибка создания репетиции:', error);
             throw error;
         }
+        
+        // Отправка уведомлений в Telegram через Edge Function
+        if (window.Telegram && typeof window.Telegram.notifyGroupMembers === 'function') {
+            window.Telegram.notifyGroupMembers(groupId, data).catch(err => {
+                console.warn('⚠️ Не удалось отправить уведомления в Telegram:', err);
+            });
+        }
+        
         return data;
     },
     
@@ -326,7 +334,6 @@ window.Groups = {
         const supabase = window.initSupabase();
         if (!supabase) return 'unknown';
         
-        // Ищем события, которые пересекаются с выбранным интервалом
         const { data, error } = await supabase
             .from('user_schedule')
             .select('status, start_time, end_time')
@@ -340,12 +347,10 @@ window.Groups = {
         
         if (!data || data.length === 0) return 'unknown';
         
-        // Проверяем пересечение с каждым событием
         for (const event of data) {
             const eventStart = event.start_time;
             const eventEnd = event.end_time;
             
-            // Пересечение есть, если начало события < конец выбранного И конец события > начало выбранного
             if (eventStart < endTime && eventEnd > startTime) {
                 if (event.status === 'busy') return 'busy';
                 if (event.status === 'free') return 'free';
@@ -441,7 +446,7 @@ window.Groups = {
         });
     },
     
-    // Показать календарь для выбора даты и времени репетиции (для лидера) - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+    // Показать календарь для выбора даты и времени репетиции (для лидера)
     async showScheduleRehearsalWithCalendar(groupId) {
         const members = await this.loadGroupMembers(groupId);
         if (!members.length) {
@@ -455,10 +460,8 @@ window.Groups = {
         let selectedStart = '18:00';
         let selectedEnd = '20:00';
         
-        // Кэш для занятых дней
         let busyDaysCache = new Set();
         
-        // Загружаем занятые дни за месяц ОДНИМ ЗАПРОСОМ
         const loadBusyDaysForMonth = async (year, month) => {
             const supabase = window.initSupabase();
             if (!supabase) return new Set();
@@ -493,7 +496,6 @@ window.Groups = {
             return busyDays;
         };
         
-        // Рендеринг календаря
         const renderCalendar = (busyDays) => {
             const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
             const startWeekday = firstDayOfMonth.getDay();
@@ -529,7 +531,6 @@ window.Groups = {
             return calendarHtml;
         };
         
-        // Функция показа модального окна
         const showModal = async (isMonthChange = false) => {
             if (isMonthChange) {
                 Swal.fire({
@@ -739,7 +740,7 @@ window.Groups = {
                     <span class="user-name">
                         <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
                         ${window.currentProfile?.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + window.currentProfile.unique_code + '</span>' : ''}
-                        ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;">👑 Админ</span>' : ''}
+                        ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;"><i class="fas fa-shield-alt"></i> Администрация</span>' : ''}
                     </span>
                     <button class="btn btn-secondary" id="profileBtn" style="background: #8b5cf6;">
                         <i class="fas fa-user"></i> Профиль
@@ -978,8 +979,12 @@ window.Groups = {
         
         let membersHtml = '';
         for (const m of members) {
-            const displayName = m.nickname ? m.nickname : `${m.last_name} ${m.first_name}`;
-            const roleText = m.role === 'leader' ? '👑 Лидер' : '💃 Участник';
+            const displayName = m.nickname || `${m.last_name} ${m.first_name}`;
+            const isAdminUser = m.role === 'admin';
+            const roleText = m.groupRole === 'leader' ? '👑 Лидер' : '💃 Участник';
+            
+            const adminBadge = isAdminUser ? '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Администрация</span>' : '';
+            
             const removeButton = (isLeader && m.id !== window.currentProfile.id) ? 
                 '<button class="btn btn-danger remove-member-btn" data-user-id="' + m.id + '" style="padding: 5px 10px; font-size: 12px;"><i class="fas fa-user-minus"></i></button>' : '';
             const infoButton = isLeader ? `<button class="btn btn-secondary info-member-btn" data-user-id="${m.id}" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;"><i class="fas fa-info-circle"></i></button>` : '';
@@ -989,6 +994,7 @@ window.Groups = {
                     <div>
                         <strong>${this.escapeHtml(displayName)}</strong>
                         <span class="member-role">${roleText}</span>
+                        ${adminBadge}
                         <div class="member-code">Код: ${m.unique_code}</div>
                     </div>
                     <div>
@@ -1130,6 +1136,7 @@ window.Groups = {
     showUserInfoModal(user) {
         const fullName = `${user.last_name} ${user.first_name}${user.patronymic ? ' ' + user.patronymic : ''}`;
         const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : 'Не указана';
+        const isAdmin = user.role === 'admin';
         
         Swal.fire({
             title: 'Информация об участнике',
@@ -1142,6 +1149,12 @@ window.Groups = {
                     ${user.nickname ? `<p><strong>Никнейм:</strong> ${this.escapeHtml(user.nickname)}</p>` : ''}
                     <p><strong>Код:</strong> ${this.escapeHtml(user.unique_code)}</p>
                     <p><strong>Email:</strong> ${this.escapeHtml(user.email)}</p>
+                    <p>
+                        <strong>Роль в системе:</strong> 
+                        ${isAdmin ? 
+                            '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Администратор</span>' : 
+                            '<span style="color: #9ca3af;">Пользователь</span>'}
+                    </p>
                 </div>
             `,
             icon: 'info',

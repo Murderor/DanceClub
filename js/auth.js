@@ -105,7 +105,8 @@ window.Auth = {
             birth_date: metadata.birth_date || null,
             unique_code: uniqueCode,
             role: 'user',
-            nickname: metadata.nickname || null  // добавлено поле nickname
+            nickname: metadata.nickname || null,
+            telegram_chat_id: metadata.telegram_chat_id || null
         };
         
         console.log('📝 Данные для создания:', userData);
@@ -192,11 +193,11 @@ window.Auth = {
                 <div id="login-form" class="auth-form active">
                     <div class="form-row">
                         <label>Email</label>
-                        <input type="email" id="login-email" placeholder="example@mail.com" required>
+                        <input type="email" id="login-email" placeholder="example@mail.com" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div class="form-row">
                         <label>Пароль</label>
-                        <input type="password" id="login-password" placeholder="••••••••" required>
+                        <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
                     </div>
                     <button id="signin-btn">Войти</button>
                 </div>
@@ -204,15 +205,15 @@ window.Auth = {
                 <div id="register-form" class="auth-form">
                     <div class="form-row">
                         <label>Фамилия *</label>
-                        <input type="text" id="reg-lastname" placeholder="Иванов" required>
+                        <input type="text" id="reg-lastname" placeholder="Иванов" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div class="form-row">
                         <label>Имя *</label>
-                        <input type="text" id="reg-firstname" placeholder="Анна" required>
+                        <input type="text" id="reg-firstname" placeholder="Анна" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div class="form-row">
                         <label>Отчество</label>
-                        <input type="text" id="reg-patronymic" placeholder="Сергеевна">
+                        <input type="text" id="reg-patronymic" placeholder="Сергеевна" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div class="form-row">
                         <label>Дата рождения *</label>
@@ -220,15 +221,23 @@ window.Auth = {
                     </div>
                     <div class="form-row">
                         <label>Никнейм (будет отображаться вместо имени)</label>
-                        <input type="text" id="reg-nickname" placeholder="Ваш никнейм (необязательно)">
+                        <input type="text" id="reg-nickname" placeholder="Ваш никнейм (необязательно)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+                    </div>
+                    <div class="form-row">
+                        <label>Telegram Chat ID (для уведомлений)</label>
+                        <input type="text" id="reg-telegram-id" placeholder="123456789" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+                        <small style="color:#6b7280; display: block; margin-top: 5px;">
+                            <i class="fab fa-telegram"></i> 
+                            Чтобы узнать свой ID, напишите боту <a href="https://t.me/userinfobot" target="_blank" style="color: #8b5cf6;">@userinfobot</a> а за тем нашему <a href="https://t.me/danceMogHub_bot" target="_blank" style="color: #8b5cf6;">@DanceHubManagerBot</a> (команда /start).
+                        </small>
                     </div>
                     <div class="form-row">
                         <label>Email *</label>
-                        <input type="email" id="reg-email" placeholder="example@mail.com" required>
+                        <input type="email" id="reg-email" placeholder="example@mail.com" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div class="form-row">
                         <label>Пароль *</label>
-                        <input type="password" id="reg-password" placeholder="минимум 6 символов" required>
+                        <input type="password" id="reg-password" placeholder="минимум 6 символов" required autocomplete="new-password">
                     </div>
                     <button id="signup-btn">Зарегистрироваться</button>
                 </div>
@@ -277,7 +286,6 @@ window.Auth = {
                     Swal.fire('Ошибка входа', error.message, 'error');
                 } else {
                     console.log('✅ Вход выполнен успешно');
-                    // Перезагружаем страницу для загрузки данных
                     window.location.reload();
                 }
             });
@@ -299,6 +307,7 @@ window.Auth = {
                 const patronymic = document.getElementById('reg-patronymic').value.trim();
                 const birthDate = document.getElementById('reg-birthdate').value;
                 const nickname = document.getElementById('reg-nickname').value.trim() || null;
+                const telegramId = document.getElementById('reg-telegram-id').value.trim() || null;
                 const email = document.getElementById('reg-email').value.trim();
                 const password = document.getElementById('reg-password').value;
                 
@@ -321,6 +330,16 @@ window.Auth = {
                     return;
                 }
                 
+                // Валидация Telegram Chat ID
+                let telegramChatId = null;
+                if (telegramId) {
+                    if (!/^\d+$/.test(telegramId)) {
+                        Swal.fire('Ошибка', 'Telegram Chat ID должен содержать только цифры', 'warning');
+                        return;
+                    }
+                    telegramChatId = parseInt(telegramId);
+                }
+                
                 const fullName = `${lastName} ${firstName} ${patronymic}`.trim();
                 
                 const { data, error } = await supabase.auth.signUp({ 
@@ -333,7 +352,8 @@ window.Auth = {
                             first_name: firstName,
                             patronymic: patronymic || null,
                             birth_date: birthDate,
-                            nickname: nickname
+                            nickname: nickname,
+                            telegram_chat_id: telegramChatId
                         } 
                     }
                 });
@@ -347,11 +367,8 @@ window.Auth = {
                         icon: 'success',
                         confirmButtonText: 'Отлично'
                     }).then(() => {
-                        // Переключаемся на форму входа
                         const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
                         if (loginTab) loginTab.click();
-                        
-                        // Очищаем форму регистрации
                         const regForm = document.getElementById('register-form');
                         if (regForm) {
                             regForm.querySelectorAll('input').forEach(input => input.value = '');

@@ -348,6 +348,11 @@ window.Profile = {
                     <label>Дата рождения *</label>
                     <input type="date" id="edit-birthdate" class="swal2-input" value="${profile.birth_date || ''}">
                 </div>
+                <div class="form-group">
+                    <label>Telegram Chat ID (для уведомлений)</label>
+                    <input type="text" id="edit-telegram-id" class="swal2-input" placeholder="123456789" value="${profile.telegram_chat_id || ''}">
+                    <small style="color:#6b7280;">Напишите боту @userinfobot, чтобы узнать свой ID</small>
+                </div>
             `,
             showCancelButton: true,
             confirmButtonText: 'Сохранить',
@@ -358,6 +363,7 @@ window.Profile = {
                 const patronymic = document.getElementById('edit-patronymic').value.trim() || null;
                 const nickname = document.getElementById('edit-nickname').value.trim() || null;
                 const birthDate = document.getElementById('edit-birthdate').value;
+                const telegramId = document.getElementById('edit-telegram-id').value.trim();
                 
                 if (!lastName || !firstName || !birthDate) {
                     Swal.showValidationMessage('Заполните все обязательные поля');
@@ -371,16 +377,34 @@ window.Profile = {
                     return false;
                 }
                 
+                let telegramChatId = null;
+                if (telegramId) {
+                    if (!/^\d+$/.test(telegramId)) {
+                        Swal.showValidationMessage('Telegram Chat ID должен содержать только цифры');
+                        return false;
+                    }
+                    telegramChatId = parseInt(telegramId);
+                }
+                
                 const success = await window.Users.updateUser(profile.id, {
                     last_name: lastName,
                     first_name: firstName,
                     patronymic: patronymic,
                     nickname: nickname,
-                    birth_date: birthDate
+                    birth_date: birthDate,
+                    telegram_chat_id: telegramChatId   // 👈 сохраняем Telegram ID
                 });
                 
                 if (success) {
-                    window.currentProfile = { ...window.currentProfile, last_name: lastName, first_name: firstName, patronymic: patronymic, nickname: nickname, birth_date: birthDate };
+                    window.currentProfile = { 
+                        ...window.currentProfile, 
+                        last_name: lastName, 
+                        first_name: firstName, 
+                        patronymic: patronymic, 
+                        nickname: nickname, 
+                        birth_date: birthDate,
+                        telegram_chat_id: telegramChatId
+                    };
                 }
                 return success;
             }
