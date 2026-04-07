@@ -39,7 +39,6 @@ window.Users = {
             return false;
         }
         
-        // Генерируем уникальный код
         const uniqueCode = await this.getUniqueCode();
         
         const newUser = {
@@ -95,13 +94,11 @@ window.Users = {
             
             console.log('✅ Пользователь обновлен в Supabase');
             
-            // Обновляем локальные данные
             const index = window.allUsers.findIndex(u => u.id === userId);
             if (index !== -1) {
                 window.allUsers[index] = { ...window.allUsers[index], ...updatedData, updated_at: new Date().toISOString() };
             }
             
-            // Если обновляем текущего пользователя, обновляем и профиль
             if (window.currentProfile && window.currentProfile.id === userId) {
                 window.currentProfile = { ...window.currentProfile, ...updatedData };
                 console.log('🔄 Обновлен текущий профиль пользователя');
@@ -120,7 +117,6 @@ window.Users = {
         const user = window.allUsers.find(u => u.id === userId);
         if (!user) return false;
         
-        // Нельзя удалить текущего пользователя
         if (userId === window.currentProfile?.id) {
             Swal.fire('Ошибка', 'Нельзя удалить свой профиль', 'warning');
             return false;
@@ -207,191 +203,7 @@ window.Users = {
         return code;
     },
     
-    renderUsersTable(searchTerm = '') {
-        this.showBackToDashboard();
-        const mainContainer = document.getElementById('main-container');
-        if (!mainContainer) return;
-        
-        let tableContainer = mainContainer.querySelector('.table-container');
-        if (!tableContainer) {
-            this.renderFullUsersTable(searchTerm);
-            return;
-        }
-        
-        if (!window.allUsers || window.allUsers.length === 0) {
-            const tbody = tableContainer.querySelector('tbody');
-            if (tbody) {
-                tbody.innerHTML = '<tr class="empty-row"><td colspan="7">😢 Нет участников. Добавьте первого участника!</td></tr>';
-            }
-            this.updateStats();
-            return;
-        }
-        
-        let filteredUsers = window.allUsers;
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filteredUsers = window.allUsers.filter(user => 
-                (user.nickname?.toLowerCase() || '').includes(term) ||
-                (user.last_name?.toLowerCase() || '').includes(term) ||
-                (user.first_name?.toLowerCase() || '').includes(term) ||
-                (user.unique_code?.toLowerCase() || '').includes(term) ||
-                (user.email?.toLowerCase() || '').includes(term)
-            );
-        }
-        
-        const tbody = tableContainer.querySelector('tbody');
-        if (!tbody) return;
-        
-        if (filteredUsers.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">😢 Нет участников, соответствующих запросу.</td></tr>';
-            return;
-        }
-        
-        let html = '';
-        for (const user of filteredUsers) {
-            const birthDate = user.birth_date ? new Date(user.birth_date).toLocaleDateString('ru-RU') : '—';
-            const isCurrentUser = window.currentProfile && user.id === window.currentProfile.id;
-            const displayName = user.nickname || `${user.last_name} ${user.first_name}`;
-            const isAdmin = user.role === 'admin';
-            
-            // Значок администратора
-            const adminBadge = isAdmin ? '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Админ</span>' : '';
-            
-            html += `
-                <tr ${isCurrentUser ? 'style="background: rgba(139, 92, 246, 0.1);"' : ''}>
-                    <td>${isCurrentUser ? '👤 ' : ''}${this.escapeHtml(displayName)} ${adminBadge}</td>
-                    <td><span class="user-code">${this.escapeHtml(user.unique_code || '—')}</span></td>
-                    <td>${birthDate}</td>
-                    <td>${this.escapeHtml(user.email || '—')}</td>
-                    <td>
-                        ${isAdmin ? 
-                            '<span style="color: #ef4444; font-weight: 600;"><i class="fas fa-shield-alt"></i> Администратор</span>' : 
-                            '<span style="color: #9ca3af;">Пользователь</span>'}
-                    </td>
-                    <td class="action-icons">
-                        <i class="fas fa-edit" data-id="${user.id}" title="Редактировать"></i>
-                        ${!isCurrentUser ? '<i class="fas fa-trash-alt" data-id="' + user.id + '" title="Удалить"></i>' : ''}
-                    </td>
-                </tr>
-            `;
-        }
-        
-        tbody.innerHTML = html;
-        
-        tbody.querySelectorAll('.fa-edit').forEach(icon => {
-            icon.addEventListener('click', () => this.openEditModal(icon.getAttribute('data-id')));
-        });
-        
-        tbody.querySelectorAll('.fa-trash-alt').forEach(icon => {
-            icon.addEventListener('click', () => this.deleteUser(icon.getAttribute('data-id')));
-        });
-        
-        this.updateStats();
-    },
-    
-    // Полная отрисовка страницы с таблицей
-    renderFullUsersTable(searchTerm = '') {
-        const mainContainer = document.getElementById('main-container');
-        if (!mainContainer) return;
-        
-        window.currentView = 'members';
-        
-        const profile = window.currentProfile;
-        const userName = profile.nickname || `${profile.last_name} ${profile.first_name}`;
-        const isAdmin = profile.role === 'admin';
-        
-        mainContainer.innerHTML = `
-            <div class="main-header">
-                <div class="logo">
-                    <h1>💃 DanceHub</h1>
-                    <p>Управление танцевальными коллективами</p>
-                </div>
-                <div class="user-info">
-                    <span class="user-name">
-                        <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
-                        ${profile.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + profile.unique_code + '</span>' : ''}
-                        ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;"><i class="fas fa-shield-alt"></i> Админ</span>' : ''}
-                    </span>
-                    <button class="btn btn-secondary" id="backToDashboardBtn">
-                        <i class="fas fa-arrow-left"></i> Назад к коллективам
-                    </button>
-                    <button class="btn btn-secondary" id="profileBtn" style="background: #8b5cf6;">
-                        <i class="fas fa-user"></i> Профиль
-                    </button>
-                    <button class="logout-btn" id="logoutBtn">
-                        <i class="fas fa-sign-out-alt"></i> Выйти
-                    </button>
-                </div>
-            </div>
-            
-            <div class="action-bar">
-                <button class="btn btn-primary" id="addUserBtn">
-                    <i class="fas fa-user-plus"></i> Добавить участника
-                </button>
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchUsersInput" placeholder="Поиск по имени, коду, email...">
-                </div>
-                <button class="btn btn-secondary" id="refreshUsersBtn">
-                    <i class="fas fa-sync-alt"></i> Обновить
-                </button>
-            </div>
-            
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Участник</th>
-                            <th>Код</th>
-                            <th>Дата рождения</th>
-                            <th>Email</th>
-                            <th>Роль</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        ${this.renderUsersTableRows(window.allUsers, searchTerm)}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) logoutBtn.addEventListener('click', () => window.Auth.logout());
-        
-        const backBtn = document.getElementById('backToDashboardBtn');
-        if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());
-        
-        const profileBtn = document.getElementById('profileBtn');
-        if (profileBtn) {
-            profileBtn.addEventListener('click', () => {
-                if (window.Profile && window.Profile.showProfilePage) {
-                    window.Profile.showProfilePage();
-                }
-            });
-        }
-        
-        const addBtn = document.getElementById('addUserBtn');
-        if (addBtn) addBtn.addEventListener('click', () => this.showAddModal());
-        
-        const refreshBtn = document.getElementById('refreshUsersBtn');
-        if (refreshBtn) refreshBtn.addEventListener('click', async () => {
-            await this.loadUsers();
-            this.renderFullUsersTable();
-        });
-        
-        const searchInput = document.getElementById('searchUsersInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.renderFullUsersTable(e.target.value);
-            });
-        }
-        
-        this.loadUsers().then(() => {
-            this.renderFullUsersTable(searchTerm);
-        });
-    },
-    
+    // Вспомогательный метод рендеринга строк таблицы
     renderUsersTableRows(users, searchTerm = '') {
         if (!users || users.length === 0) {
             return '<tr class="empty-row"><td colspan="6">😢 Нет участников. Добавьте первого участника!</td></tr>';
@@ -419,7 +231,6 @@ window.Users = {
             const displayName = user.nickname || `${user.last_name} ${user.first_name}`;
             const isAdmin = user.role === 'admin';
             
-            // Значок администратора
             const adminBadge = isAdmin ? '<span class="admin-badge"><i class="fas fa-shield-alt"></i> Админ</span>' : '';
             
             return `
@@ -447,6 +258,122 @@ window.Users = {
         }).join('');
     },
     
+    // Основной метод отрисовки страницы "Все участники"
+    renderFullUsersTable(searchTerm = '') {
+        const mainContainer = document.getElementById('main-container');
+        if (!mainContainer) return;
+        
+        window.currentView = 'members';
+        
+        const render = () => {
+            const profile = window.currentProfile;
+            const userName = profile.nickname || `${profile.last_name} ${profile.first_name}`;
+            const isAdmin = profile.role === 'admin';
+            
+            mainContainer.innerHTML = `
+                <div class="main-header">
+                    <div class="logo">
+                        <h1>💃 DanceHub</h1>
+                        <p>Управление танцевальными коллективами</p>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">
+                            <i class="fas fa-user-circle"></i> ${this.escapeHtml(userName)}
+                            ${profile.unique_code ? '<span class="user-code" style="margin-left: 10px;">Код: ' + profile.unique_code + '</span>' : ''}
+                            ${isAdmin ? '<span class="user-code" style="margin-left: 10px; background: #ef4444;"><i class="fas fa-shield-alt"></i> Админ</span>' : ''}
+                        </span>
+                        <button class="btn btn-secondary" id="backToDashboardBtn">
+                            <i class="fas fa-arrow-left"></i> Назад к коллективам
+                        </button>
+                        <button class="btn btn-secondary" id="profileBtn" style="background: #8b5cf6;">
+                            <i class="fas fa-user"></i> Профиль
+                        </button>
+                        <button class="logout-btn" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i> Выйти
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="action-bar">
+                    <button class="btn btn-primary" id="addUserBtn">
+                        <i class="fas fa-user-plus"></i> Добавить участника
+                    </button>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchUsersInput" placeholder="Поиск по имени, коду, email..." value="${searchTerm || ''}">
+                    </div>
+                    <button class="btn btn-secondary" id="refreshUsersBtn">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                    </button>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Участник</th>
+                                <th>Код</th>
+                                <th>Дата рождения</th>
+                                <th>Email</th>
+                                <th>Роль</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            ${this.renderUsersTableRows(window.allUsers, searchTerm)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            this.bindFullUsersTableEvents(searchTerm);
+        };
+        
+        if (!window.allUsers || window.allUsers.length === 0) {
+            this.loadUsers().then(() => render());
+        } else {
+            render();
+        }
+    },
+    
+    bindFullUsersTableEvents(searchTerm = '') {
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.addEventListener('click', () => window.Auth.logout());
+        
+        const backBtn = document.getElementById('backToDashboardBtn');
+        if (backBtn) backBtn.addEventListener('click', () => window.Groups.renderDashboard());
+        
+        const profileBtn = document.getElementById('profileBtn');
+        if (profileBtn) {
+            profileBtn.addEventListener('click', () => {
+                if (window.Profile && window.Profile.showProfilePage) {
+                    window.Profile.showProfilePage();
+                }
+            });
+        }
+        
+        const addBtn = document.getElementById('addUserBtn');
+        if (addBtn) addBtn.addEventListener('click', () => this.showAddModal());
+        
+        const refreshBtn = document.getElementById('refreshUsersBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                await this.loadUsers();
+                this.renderFullUsersTable(document.getElementById('searchUsersInput')?.value || '');
+            });
+        }
+        
+        const searchInput = document.getElementById('searchUsersInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const tbody = document.getElementById('usersTableBody');
+                if (tbody) {
+                    tbody.innerHTML = this.renderUsersTableRows(window.allUsers, e.target.value);
+                }
+            });
+        }
+    },
+    
     escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>]/g, function(m) {
@@ -455,14 +382,6 @@ window.Users = {
             if (m === '>') return '&gt;';
             return m;
         });
-    },
-    
-    updateStats() {
-        const totalCount = window.allUsers ? window.allUsers.length : 0;
-        const statsElement = document.getElementById('totalMembers');
-        if (statsElement) {
-            statsElement.textContent = totalCount;
-        }
     },
     
     showAddModal() {
@@ -638,9 +557,5 @@ window.Users = {
                 this.renderFullUsersTable();
             }
         };
-    },
-    
-    showBackToDashboard() {
-        // Для совместимости
     }
 };

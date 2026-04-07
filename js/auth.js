@@ -21,7 +21,7 @@ window.Auth = {
                 console.log('✅ Сессия найдена, пользователь:', session.user.email);
                 window.currentUser = session.user;
                 
-                // Загружаем профиль
+                // Загружаем профиль с возможной синхронизацией
                 const profile = await this.loadUserProfile();
                 console.log('📊 Профиль после загрузки:', profile);
                 
@@ -49,41 +49,99 @@ window.Auth = {
     },
     
     async loadUserProfile() {
-        if (!window.currentUser) {
-            console.log('⚠️ Нет текущего пользователя');
+    if (!window.currentUser) {
+        console.log('⚠️ Нет текущего пользователя');
+        return null;
+    }
+    
+    console.log('👤 Загружаем профиль для пользователя:', window.currentUser.id);
+    const supabase = window.initSupabase();
+    
+    if (!supabase) return null;
+    
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', window.currentUser.id)
+            .maybeSingle();
+        
+        if (error) {
+            console.error('❌ Ошибка загрузки профиля:', error);
             return null;
         }
         
-        console.log('👤 Загружаем профиль для пользователя:', window.currentUser.id);
-        const supabase = window.initSupabase();
-        
-        if (!supabase) return null;
-        
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', window.currentUser.id)
-                .maybeSingle();
+        if (data) {
+            console.log('✅ Профиль найден в БД:', data);
             
-            if (error) {
-                console.error('❌ Ошибка загрузки профиля:', error);
-                return null;
+            // Проверяем, нужно ли дополнить поля из метаданных
+            const metadata = window.currentUser.user_metadata || {};
+            const updates = {};
+            let needUpdate = false;
+            
+            // Если в профиле нет nickname, а в метаданных есть
+            if (!data.nickname && metadata.nickname) {
+                updates.nickname = metadata.nickname;
+                needUpdate = true;
             }
             
-            if (data) {
-                console.log('✅ Профиль найден:', data);
-                window.currentProfile = data;
-                return data;
-            } else {
-                console.log('ℹ️ Профиль не найден');
-                return null;
+            // Если в профиле нет telegram_chat_id, а в метаданных есть
+            if (!data.telegram_chat_id && metadata.telegram_chat_id) {
+                const telegramId = parseInt(metadata.telegram_chat_id);
+                if (!isNaN(telegramId)) {
+                    // Проверяем, не занят ли уже этот telegram_chat_id другим пользователем
+                    const { data: existing, error: checkError } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('telegram_chat_id', telegramId)
+                        .neq('id', window.currentUser.id)
+                        .maybeSingle();
+                    
+                    if (checkError) {
+                        console.error('❌ Ошибка проверки telegram_chat_id:', checkError);
+                    } else if (existing) {
+                        console.warn('⚠️ Telegram Chat ID уже используется другим пользователем:', existing.id);
+                        // Не обновляем поле, но можем уведомить пользователя через UI
+                        Swal.fire({
+                            title: 'Telegram ID занят',
+                            text: 'Указанный Telegram Chat ID уже привязан к другому аккаунту. Уведомления не будут отправляться.',
+                            icon: 'warning',
+                            confirmButtonText: 'Понятно'
+                        });
+                    } else {
+                        updates.telegram_chat_id = telegramId;
+                        needUpdate = true;
+                    }
+                }
             }
-        } catch (err) {
-            console.error('❌ Ошибка при загрузке профиля:', err);
+            
+            if (needUpdate) {
+                console.log('🔄 Обновляем профиль недостающими полями:', updates);
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .update(updates)
+                    .eq('id', window.currentUser.id);
+                
+                if (updateError) {
+                    console.error('❌ Ошибка обновления профиля:', updateError);
+                } else {
+                    // Применяем обновления к локальному объекту
+                    Object.assign(data, updates);
+                    console.log('✅ Профиль обновлён:', data);
+                }
+            }
+            
+            window.currentProfile = data;
+            return data;
+        } else {
+            console.log('ℹ️ Профиль не найден');
             return null;
         }
-    },
+    } catch (err) {
+        console.error('❌ Ошибка при загрузке профиля:', err);
+        return null;
+    }
+},
     
     async createUserProfile() {
         console.log('🆕 Создаем профиль пользователя');
@@ -91,10 +149,17 @@ window.Auth = {
         
         if (!supabase) return;
         
-        const metadata = window.currentUser.user_metadata || {};
+        const metadata = window.currentUser?.user_metadata || {};
+        console.log('📋 Метаданные из currentUser:', metadata);
         
         // Генерируем уникальный код
         const uniqueCode = await this.getUniqueCode();
+        
+        // Явно извлекаем нужные поля с fallback
+        const nickname = metadata.nickname || null;
+        const telegramChatId = metadata.telegram_chat_id ? parseInt(metadata.telegram_chat_id) : null;
+        
+        console.log('🔍 Извлечённые значения:', { nickname, telegramChatId });
         
         const userData = {
             id: window.currentUser.id,
@@ -105,11 +170,11 @@ window.Auth = {
             birth_date: metadata.birth_date || null,
             unique_code: uniqueCode,
             role: 'user',
-            nickname: metadata.nickname || null,
-            telegram_chat_id: metadata.telegram_chat_id || null
+            nickname: nickname,
+            telegram_chat_id: telegramChatId
         };
         
-        console.log('📝 Данные для создания:', userData);
+        console.log('📝 Итоговые данные для вставки в public.users:', userData);
         
         const { error } = await supabase
             .from('users')
@@ -120,7 +185,7 @@ window.Auth = {
             Swal.fire('Ошибка', 'Не удалось создать профиль: ' + error.message, 'error');
             return null;
         } else {
-            console.log('✅ Профиль успешно создан');
+            console.log('✅ Профиль успешно создан в БД');
             window.currentProfile = userData;
             
             // Обновляем глобальный список пользователей
@@ -228,7 +293,8 @@ window.Auth = {
                         <input type="text" id="reg-telegram-id" placeholder="123456789" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                         <small style="color:#6b7280; display: block; margin-top: 5px;">
                             <i class="fab fa-telegram"></i> 
-                            Чтобы узнать свой ID, напишите боту <a href="https://t.me/userinfobot" target="_blank" style="color: #8b5cf6;">@userinfobot</a> а за тем нашему <a href="https://t.me/danceMogHub_bot" target="_blank" style="color: #8b5cf6;">@DanceHubManagerBot</a> (команда /start).
+                            Напишите боту <a href="https://t.me/userinfobot" target="_blank" style="color: #8b5cf6;">@userinfobot</a> в Telegram, он пришлёт ваш ID.<br>
+                            Скопируйте число и вставьте сюда.
                         </small>
                     </div>
                     <div class="form-row">
@@ -250,7 +316,6 @@ window.Auth = {
     bindAuthEvents() {
         console.log('🔗 Привязываем события авторизации');
         
-        // Переключение между формами
         document.querySelectorAll('.auth-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
@@ -262,7 +327,6 @@ window.Auth = {
             });
         });
         
-        // Вход
         const signinBtn = document.getElementById('signin-btn');
         if (signinBtn) {
             signinBtn.addEventListener('click', async () => {
@@ -291,7 +355,6 @@ window.Auth = {
             });
         }
         
-        // Регистрация
         const signupBtn = document.getElementById('signup-btn');
         if (signupBtn) {
             signupBtn.addEventListener('click', async () => {
@@ -311,7 +374,6 @@ window.Auth = {
                 const email = document.getElementById('reg-email').value.trim();
                 const password = document.getElementById('reg-password').value;
                 
-                // Валидация
                 if (!lastName || !firstName || !birthDate || !email || !password) {
                     Swal.fire('Ошибка', 'Заполните все обязательные поля (отмечены *)', 'warning');
                     return;
@@ -322,7 +384,6 @@ window.Auth = {
                     return;
                 }
                 
-                // Проверка возраста
                 const birthYear = new Date(birthDate).getFullYear();
                 const currentYear = new Date().getFullYear();
                 if (currentYear - birthYear < 5) {
@@ -330,7 +391,6 @@ window.Auth = {
                     return;
                 }
                 
-                // Валидация Telegram Chat ID
                 let telegramChatId = null;
                 if (telegramId) {
                     if (!/^\d+$/.test(telegramId)) {
@@ -339,6 +399,8 @@ window.Auth = {
                     }
                     telegramChatId = parseInt(telegramId);
                 }
+                
+                console.log('📋 Данные для регистрации:', { nickname, telegramChatId });
                 
                 const fullName = `${lastName} ${firstName} ${patronymic}`.trim();
                 
